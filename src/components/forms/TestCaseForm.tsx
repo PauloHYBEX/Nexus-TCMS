@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/use-toast';
 import { TestCase, TestPlan, TestStep } from '@/types';
 import { Plus, Trash2 } from 'lucide-react';
 import SearchableCombobox from '@/components/SearchableCombobox';
+import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
 
 interface TestCaseFormProps {
   onSuccess?: (testCase: TestCase) => void;
@@ -26,6 +27,8 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
   const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [plans, setPlans] = useState<TestPlan[]>([]);
+  // Projeto selecionado localmente no modal (padrão: projeto atual)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(currentProject?.id || null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -39,14 +42,17 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
     { id: '1', action: '', expected_result: '', order: 1 }
   ]);
 
-  // Draft persistence helpers
-  const getDraftKey = () => (initialData ? `draft:testcase:edit:${initialData.id}` : 'draft:testcase:new');
+  // Draft persistence helpers — escopo por usuário e projeto para evitar "mock" cross-projeto
+  const getDraftKey = () => {
+    const scope = `${user?.id || 'anon'}:${currentProject?.id || 'all'}`;
+    return initialData ? `draft:testcase:edit:${initialData.id}:${scope}` : `draft:testcase:new:${scope}`;
+  };
 
   useEffect(() => {
     if (user && !planId) {
       loadPlans();
     }
-  }, [user, planId, currentProject]);
+  }, [user, planId, selectedProjectId]);
 
   // Prefill when editing
   useEffect(() => {
@@ -75,6 +81,10 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
 
   // Hydrate draft from localStorage (draft takes precedence over prefill)
   useEffect(() => {
+    // Cleanup drafts legados (sem escopo) para evitar preencher com dados antigos
+    try { localStorage.removeItem('draft:testcase:new'); } catch {}
+    try { if (initialData?.id) localStorage.removeItem(`draft:testcase:edit:${initialData.id}`); } catch {}
+
     try {
       const raw = localStorage.getItem(getDraftKey());
       if (!raw) return;
@@ -127,7 +137,7 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
       console.warn('Falha ao carregar rascunho de caso de teste');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.id]);
+  }, [initialData?.id, currentProject?.id, user?.id]);
 
   // Persist draft on changes
   useEffect(() => {
@@ -139,15 +149,14 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
       /* noop */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData, steps, initialData?.id]);
+  }, [formData, steps, initialData?.id, currentProject?.id, user?.id]);
 
   const loadPlans = async () => {
     try {
-      // Se há projeto selecionado, carrega apenas planos desse projeto
-      // Se não há projeto ("Todos os projetos"), carrega todos os planos
-      const data = currentProject 
-        ? await getTestPlansByProject(user!.id, currentProject.id)
-        : await getTestPlans(user!.id);
+      // Carrega somente planos do projeto selecionado localmente. Sem projeto, lista vazia.
+      const data = selectedProjectId 
+        ? await getTestPlansByProject(user!.id, selectedProjectId)
+        : [];
       setPlans(data);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
@@ -160,6 +169,12 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
 
     setLoading(true);
     try {
+      // Exigir seleção de Plano para garantir vínculo com projeto
+      if (!formData.plan_id) {
+        toast({ title: 'Selecione um plano', description: 'Para criar um Caso é necessário escolher um Plano de Teste.', variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
       // Normalize empty UUIDs to null to avoid Postgres uuid parse errors
       const cleanPlanId = formData.plan_id && formData.plan_id.trim() !== '' ? formData.plan_id : null;
 
@@ -239,6 +254,21 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Seleção de Projeto local no modal */}
+          {!initialData && !planId && (
+            <div>
+              <Label htmlFor="project_id">Projeto</Label>
+              <ProjectSelectField
+                value={selectedProjectId || ''}
+                onValueChange={(value) => {
+                  setSelectedProjectId(value || null);
+                  // Ao trocar de projeto, resetar plano selecionado
+                  setFormData(prev => ({ ...prev, plan_id: '' }));
+                }}
+                placeholder="Selecione um projeto"
+              />
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="title">Título *</Label>
@@ -252,13 +282,13 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
             </div>
             {!planId && (
               <div>
-                <Label htmlFor="plan_id">Plano de Teste</Label>
+                <Label htmlFor="plan_id">Plano de Teste *</Label>
                 <SearchableCombobox
                   items={plans.map((p) => ({ value: p.id, label: p.title, hint: (p as any).description?.slice(0, 80) }))}
                   value={formData.plan_id}
                   onChange={(value) => handleChange('plan_id', value)}
                   placeholder="Selecione um plano"
-                  disabled={loading}
+                  disabled={loading || !selectedProjectId}
                 />
               </div>
             )}
@@ -382,7 +412,7 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
                 Cancelar
               </Button>
             )}
-            <Button type="submit" disabled={loading} className="bg-brand hover:bg-brand/90 text-white">
+            <Button type="submit" disabled={loading || !formData.plan_id} className="bg-brand hover:bg-brand/90 text-white">
               {loading ? (initialData ? 'Salvando...' : 'Criando...') : (initialData ? 'Salvar Alterações' : 'Criar Caso')}
             </Button>
           </div>

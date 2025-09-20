@@ -6,10 +6,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
+import { useProject } from '@/contexts/ProjectContext';
 import { createTestExecution, getTestCases, getTestPlans, updateTestExecution } from '@/services/supabaseService';
 import { toast } from '@/components/ui/use-toast';
 import { TestExecution, TestCase, TestPlan } from '@/types';
 import SearchableCombobox from '@/components/SearchableCombobox';
+import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
 
 interface TestExecutionFormProps {
   onSuccess?: (execution: TestExecution) => void;
@@ -21,10 +23,13 @@ interface TestExecutionFormProps {
 
 export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, execution }: TestExecutionFormProps) => {
   const { user } = useAuth();
+  const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [cases, setCases] = useState<TestCase[]>([]);
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
+  // Projeto selecionado localmente no modal (padrão: projeto atual)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(currentProject?.id || null);
   const [formData, setFormData] = useState<{
     case_id: string;
     plan_id: string;
@@ -42,7 +47,10 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
   });
 
   const isEdit = !!execution;
-  const storageKey = isEdit ? `draft:testexec:edit:${execution?.id}` : 'draft:testexec:new';
+  const storageKey = (() => {
+    const scope = `${user?.id || 'anon'}:${currentProject?.id || 'all'}`;
+    return isEdit ? `draft:testexec:edit:${execution?.id}:${scope}` : `draft:testexec:new:${scope}`;
+  })();
 
   useEffect(() => {
     if (user) {
@@ -55,10 +63,14 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
         loadCases(execution.plan_id);
       }
     }
-  }, [user, planId, execution?.plan_id]);
+  }, [user, planId, execution?.plan_id, selectedProjectId]);
 
   // Hydrate draft from localStorage
   useEffect(() => {
+    // Cleanup drafts legados (sem escopo) para evitar preencher com dados antigos
+    try { localStorage.removeItem('draft:testexec:new'); } catch {}
+    try { if (execution?.id) localStorage.removeItem(`draft:testexec:edit:${execution.id}`); } catch {}
+
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw) {
@@ -109,7 +121,7 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
 
   const loadPlans = async () => {
     try {
-      const data = await getTestPlans(user!.id);
+      const data = selectedProjectId ? await getTestPlans(user!.id, selectedProjectId) : [];
       setPlans(data);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
@@ -208,6 +220,22 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {!isEdit && !planId && (
+            <div>
+              <Label htmlFor="project_id">Projeto</Label>
+              <ProjectSelectField
+                value={selectedProjectId || ''}
+                onValueChange={(value) => {
+                  setSelectedProjectId(value || null);
+                  // reset plano e caso ao mudar projeto
+                  setFormData(prev => ({ ...prev, plan_id: '', case_id: '' }));
+                  setCases([]);
+                  setSelectedCase(null);
+                }}
+                placeholder="Selecione um projeto"
+              />
+            </div>
+          )}
           {!planId && !isEdit && (
             <div>
               <Label htmlFor="plan_id">Plano de Teste *</Label>
@@ -216,7 +244,7 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
                 value={formData.plan_id}
                 onChange={(value) => handleChange('plan_id', value)}
                 placeholder="Selecione um plano"
-                disabled={loading}
+                disabled={loading || !selectedProjectId}
               />
             </div>
           )}

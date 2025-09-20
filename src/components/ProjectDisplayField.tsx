@@ -6,13 +6,13 @@ interface ProjectDisplayFieldProps {
 }
 
 export const ProjectDisplayField: React.FC<ProjectDisplayFieldProps> = ({ projectId }) => {
-  const { projects } = useProject();
+  const { projects, archivedProjects } = useProject();
   
   if (!projectId) {
     return <span className="text-sm text-muted-foreground">Sem Projeto</span>;
   }
 
-  const project = projects.find(p => p.id === projectId);
+  const project = projects.find(p => p.id === projectId) || archivedProjects.find(p => p.id === projectId);
   
   if (!project) {
     return <span className="text-sm text-muted-foreground">Projeto não encontrado</span>;

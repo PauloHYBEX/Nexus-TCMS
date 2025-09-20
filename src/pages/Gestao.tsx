@@ -8,10 +8,13 @@ import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { StandardButton } from '@/components/StandardButton';
 import { Plus } from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useProject } from '@/contexts/ProjectContext';
 
 export const Gestao = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission } = usePermissions();
+  const { currentProject } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const [tab, setTab] = useState<'requirements' | 'traceability' | 'defects'>(() => {
     const t = (searchParams.get('tab') || 'requirements') as any;
     if (t === 'traceability' || t === 'defects' || t === 'requirements') return t;
@@ -74,6 +77,8 @@ export const Gestao = () => {
           <StandardButton
             onClick={handleCreate}
             className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
+            disabled={!currentProject || isProjectInactive}
+            title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação desabilitada' : undefined)}
           >
             <Plus className="h-4 w-4 mr-2" />
             {tab === 'requirements' || tab === 'traceability' ? 'Novo Requisito' : 'Novo Defeito'}

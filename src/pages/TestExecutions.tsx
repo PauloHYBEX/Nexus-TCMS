@@ -17,7 +17,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { executionStatusBadgeClass, executionStatusLabel } from '@/lib/labels';
 import { useProject } from '@/contexts/ProjectContext';
-import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -50,9 +49,9 @@ export const TestExecutions = () => {
   // Pagination
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(9);
-  // Projeto atual e filtro por projeto
-  const { currentProject } = useProject();
-  const [filterProject, setFilterProject] = useState<string>(currentProject?.id || 'all');
+  // Projeto atual (controle global)
+  const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   // Mapas para enriquecer colunas (plano/caso)
   const [planMap, setPlanMap] = useState<Record<string, { id: string; sequence?: number; project_id: string }>>({});
   const [caseMap, setCaseMap] = useState<Record<string, { id: string; sequence?: number }>>({});
@@ -69,7 +68,7 @@ export const TestExecutions = () => {
     if (user) {
       loadExecutions();
     }
-  }, [user, filterProject]);
+  }, [user, currentProject?.id, projects]);
 
   // Persistir modo de visualização
   useEffect(() => {
@@ -98,21 +97,17 @@ export const TestExecutions = () => {
     }
   }, [executions, searchParams]);
 
-  // Restaurar filtros via URL (?status=&q=&project=)
+  // Restaurar filtros via URL (?status=&q=)
   useEffect(() => {
     const status = searchParams.get('status');
     const q = searchParams.get('q');
-    const p = searchParams.get('project');
     if (status && isExecStatus(status)) {
       setFilterStatus(status);
     }
     if (q !== null) {
       setSearchTerm(q);
     }
-    if (p) setFilterProject(p);
-    else if (currentProject?.id) setFilterProject(currentProject.id);
-    else setFilterProject('all');
-  }, [searchParams, currentProject?.id]);
+  }, [searchParams]);
 
   // Restaurar abertura de modais via URL (?modal=exec:new | exec:edit&id=...)
   useEffect(() => {
@@ -223,10 +218,19 @@ export const TestExecutions = () => {
   const loadExecutions = async () => {
     try {
       setLoading(true);
-      const projectParam = filterProject === 'all' ? undefined : filterProject;
-      const data = projectParam
-        ? await getTestExecutionsByProject(user!.id, projectParam)
-        : await getTestExecutions(user!.id);
+      let data: TestExecution[] = [];
+      if (currentProject?.id) {
+        data = await getTestExecutionsByProject(user!.id, currentProject.id);
+      } else {
+        // Agregar SOMENTE projetos ATIVOS quando "Todos"
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length > 0) {
+          const lists = await Promise.all(active.map(p => getTestExecutionsByProject(user!.id, p.id)));
+          data = lists.flat();
+        } else {
+          data = [];
+        }
+      }
       setExecutions(data);
       // Enriquecer com mapas de plano e caso para exibição
       const uniquePlanIds = Array.from(new Set(data.map(e => e.plan_id).filter(Boolean)));
@@ -273,14 +277,7 @@ export const TestExecutions = () => {
     setSearchParams(params);
   };
 
-  const handleProjectFilterChange = (projectId: string) => {
-    setFilterProject(projectId);
-    setPage(1);
-    const params = new URLSearchParams(searchParams);
-    if (projectId && projectId !== 'all') params.set('project', projectId);
-    else params.set('project', 'all');
-    setSearchParams(params);
-  };
+  // Removido: filtro de projeto local — controle via Dashboard
 
   // Labels helpers
   const exeLabel = (e: TestExecution) => {
@@ -306,6 +303,7 @@ export const TestExecutions = () => {
 
   const performDelete = async () => {
     if (!deletingExecutionId) return;
+    if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Exclusão desabilitada.', variant: 'destructive' }); setConfirmDeleteOpen(false); setDeletingExecutionId(null); return; }
     try {
       await deleteTestExecution(deletingExecutionId);
       setExecutions(prev => prev.filter(ex => ex.id !== deletingExecutionId));
@@ -477,16 +475,7 @@ export const TestExecutions = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Project Filter */}
-          <div className="w-56">
-            <ProjectSelectField
-              value={filterProject}
-              onValueChange={handleProjectFilterChange}
-              includeAllOption
-              allLabel="Todos os projetos"
-              placeholder="Filtrar por projeto"
-            />
-          </div>
+          {/* Seletor de projeto removido — seleção global pelo Dashboard */}
 
           {/* View Mode Toggle */}
           <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
@@ -722,6 +711,8 @@ export const TestExecutions = () => {
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); requestDelete(execution.id); }}
                           className="h-8 w-8 p-0"
+                          disabled={!currentProject || isProjectInactive}
+                          title={!currentProject ? 'Selecione um projeto ativo para excluir execuções' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

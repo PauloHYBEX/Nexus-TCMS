@@ -50,7 +50,10 @@ export const TestPlanForm = ({ onSuccess, onCancel, initialData }: TestPlanFormP
   }, [options, formData.status]);
 
   const isEdit = !!initialData?.id;
-  const storageKey = isEdit ? `draft:testplan:edit:${initialData!.id}` : 'draft:testplan:new';
+  const storageKey = (() => {
+    const scope = `${user?.id || 'anon'}:${currentProject?.id || 'all'}`;
+    return isEdit ? `draft:testplan:edit:${initialData!.id}:${scope}` : `draft:testplan:new:${scope}`;
+  })();
 
   // Hydrate draft from localStorage
   useEffect(() => {

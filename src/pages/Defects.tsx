@@ -31,13 +31,14 @@ import SearchableCombobox from '@/components/SearchableCombobox';
 import { Input } from '@/components/ui/input';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { DetailModal } from '@/components/DetailModal';
-import { useProject } from '@/contexts/ProjectContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useProject } from '@/contexts/ProjectContext';
 
 export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewModeChange }: { embedded?: boolean; preferredViewMode?: 'cards'|'list'; onPreferredViewModeChange?: (m: 'cards'|'list') => void; }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { currentProject } = useProject();
+  const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const { hasPermission } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
@@ -74,7 +75,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
 
   useEffect(() => {
     if (user) loadData();
-  }, [user, currentProject?.id]);
+  }, [user, currentProject?.id, projects]);
 
   // Quando o caso selecionado muda, carregar execuções daquele caso
   useEffect(() => {
@@ -155,24 +156,33 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const loadData = async () => {
     try {
       setLoading(true);
-      const [defList, execList, projCases] = await Promise.all([
-        currentProject?.id
-          ? getDefectsByProject(user!.id, currentProject.id)
-          : getDefects(user!.id),
-        currentProject?.id
-          ? getTestExecutionsByProject(user!.id, currentProject.id)
-          : Promise.resolve([] as TestExecution[]),
-        currentProject?.id
-          ? getTestCasesByProject(user!.id, currentProject.id)
-          : Promise.resolve([] as TestCase[]),
-      ]);
-      setDefects(defList as Defect[]);
-      const map: Record<string, string> = {};
-      for (const e of execList as TestExecution[]) {
-        if (e.id && e.case_id) map[e.id] = e.case_id;
+      if (currentProject?.id) {
+        const [defList, execList, projCases] = await Promise.all([
+          getDefectsByProject(user!.id, currentProject.id),
+          getTestExecutionsByProject(user!.id, currentProject.id),
+          getTestCasesByProject(user!.id, currentProject.id),
+        ]);
+        setDefects(defList as Defect[]);
+        const map: Record<string, string> = {};
+        for (const e of execList as TestExecution[]) {
+          if (e.id && e.case_id) map[e.id] = e.case_id;
+        }
+        setExecutionCaseMap(map);
+        setProjectCases(projCases as TestCase[]);
+      } else {
+        // Agregar SOMENTE projetos ATIVOS quando "Todos"
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length === 0) {
+          setDefects([]);
+          setExecutionCaseMap({});
+          setProjectCases([]);
+        } else {
+          const lists = await Promise.all(active.map(p => getDefectsByProject(user!.id, p.id)));
+          setDefects(lists.flat());
+          setExecutionCaseMap({});
+          setProjectCases([]);
+        }
       }
-      setExecutionCaseMap(map);
-      setProjectCases(projCases as TestCase[]);
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message || 'Falha ao carregar defeitos', variant: 'destructive' });
     } finally {
@@ -226,6 +236,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const submit = async () => {
     try {
       if (!user) return;
+      if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Criação/Edição desabilitada para projeto inativo.', variant: 'destructive' }); return; }
       // Validação de integridade: se executionId e caseId foram informados,
       // a execução precisa pertencer ao mesmo caso selecionado
       if (executionId && caseId) {
@@ -256,6 +267,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
 
   const remove = async (id: string) => {
     try {
+      if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Exclusão desabilitada.', variant: 'destructive' }); return; }
       await deleteDefect(id);
       setDefects(prev => prev.filter(r => r.id !== id));
       toast({ title: 'Excluído', description: 'Defeito excluído.' });
@@ -306,6 +318,8 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
               icon={Plus} 
               onClick={openCreate}
               className="rounded-full px-4 shadow-[0_0_0_1px_rgba(255,255,255,0.06)]"
+              disabled={!currentProject || isProjectInactive}
+              title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação desabilitada' : undefined)}
             >
               Novo Defeito
             </StandardButton>
@@ -463,6 +477,8 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                             icon={Pencil}
                             onClick={(e) => { e.stopPropagation(); openEdit(d); }}
                             className="h-8 w-8"
+                            disabled={!currentProject || isProjectInactive}
+                            title={!currentProject ? 'Selecione um projeto ativo para editar defeitos' : (isProjectInactive ? 'Projeto não ativo — edição desabilitada' : undefined)}
                           />
                         )}
                         {hasPermission('can_manage_executions') && (
@@ -475,6 +491,8 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                             icon={Trash2}
                             onClick={(e) => { e.stopPropagation(); remove(d.id); }}
                             className="h-8 w-8"
+                            disabled={!currentProject || isProjectInactive}
+                            title={!currentProject ? 'Selecione um projeto ativo para excluir defeitos' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
                           />
                         )}
                       </div>
@@ -523,6 +541,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                           className="h-8 w-8 p-0"
                           title="Editar"
                           aria-label="Editar"
+                          disabled={!currentProject || isProjectInactive}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
@@ -535,6 +554,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                           className="h-8 w-8 p-0"
                           title="Excluir"
                           aria-label="Excluir"
+                          disabled={!currentProject || isProjectInactive}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

@@ -32,6 +32,7 @@ import {
 } from '@/lib/labels';
 import type { ExecutionStatus, TestCaseType } from '@/lib/labels';
 import { UserProfileModal } from './UserProfileModal';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface DetailModalProps {
   isOpen: boolean;
@@ -53,6 +54,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [authorRoles, setAuthorRoles] = useState<Array<{ role: 'desenvolvimento' | 'suporte' | 'gerencia' | 'supervisao' | 'visualizador'; icon?: string }>>([]);
   const [authorTags, setAuthorTags] = useState<Array<{ label: string; icon?: string }>>([]);
+  const { currentProject } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
   // Reset confirmDelete when modal is closed or item changes
   useEffect(() => {
@@ -737,7 +740,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                 </Button>
               )}
               {onEdit && (
-                <Button variant="outline" onClick={() => onEdit(item)}>
+                <Button variant="outline" onClick={() => onEdit(item)} disabled={isProjectInactive} title={isProjectInactive ? 'Projeto não ativo — edição desabilitada' : undefined}>
                   <Edit className="h-4 w-4 mr-1" />
                   Editar
                 </Button>
@@ -746,6 +749,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                 <Button 
                   variant={confirmDelete ? "destructive" : "outline"}
                   onClick={handleDelete}
+                  disabled={isProjectInactive}
+                  title={isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined}
                 >
                   <Trash2 className="h-4 w-4 mr-1" />
                   {confirmDelete ? 'Confirmar Exclusão' : 'Excluir'}

@@ -52,7 +52,7 @@ export const Dashboard = () => {
   const SINGLE_TENANT = String((import.meta as any).env?.VITE_SINGLE_TENANT ?? 'true') === 'true';
   const { user } = useAuth();
   const { settings } = useDashboardSettings();
-  const { currentProject } = useProject();
+  const { currentProject, projects } = useProject();
   const navigate = useNavigate();
   const [welcomeName, setWelcomeName] = useState<string>('Usuário');
   const [stats, setStats] = useState({
@@ -112,14 +112,24 @@ export const Dashboard = () => {
         ]);
         plans = p; cases = c; executions = e; defects = d; requirements = r;
       } else {
-        const [p, c, e, d, r] = await Promise.all([
-          getTestPlans(user!.id),
-          getTestCases(user!.id),
-          getTestExecutions(user!.id),
-          getDefects(user!.id),
-          getRequirements(user!.id),
-        ]);
-        plans = p; cases = c; executions = e; defects = d; requirements = r;
+        // Agregar apenas dados de projetos ATIVOS
+        const active = (projects || []).filter(pr => pr.status === 'active');
+        if (active.length === 0) {
+          plans = []; cases = []; executions = []; defects = []; requirements = [];
+        } else {
+          const [plansLists, casesLists, execLists, defectLists, reqLists] = await Promise.all([
+            Promise.all(active.map(pj => getTestPlans(user!.id, pj.id))),
+            Promise.all(active.map(pj => getTestCasesByProject(user!.id, pj.id))),
+            Promise.all(active.map(pj => getTestExecutionsByProject(user!.id, pj.id))),
+            Promise.all(active.map(pj => getDefectsByProject(user!.id, pj.id))),
+            Promise.all(active.map(pj => getRequirementsByProject(user!.id, pj.id))),
+          ]);
+          plans = plansLists.flat();
+          cases = casesLists.flat();
+          executions = execLists.flat();
+          defects = defectLists.flat();
+          requirements = reqLists.flat();
+        }
       }
 
       const passedExecutions = executions.filter(e => e.status === 'passed').length;
@@ -349,16 +359,14 @@ export const Dashboard = () => {
           <div className="flex gap-2 self-start md:self-auto">
             <Dialog open={showForm} onOpenChange={setShowForm}>
               <DialogTrigger asChild>
-                <span>
-                  <StandardButton 
-                    icon={Plus} 
-                    className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
-                    disabled={!!currentProject && currentProject.status !== 'active'}
-                    title={currentProject && currentProject.status !== 'active' ? 'Projeto não ativo — ações de criação desabilitadas' : undefined}
-                  >
-                    {quickActionConfig.label}
-                  </StandardButton>
-                </span>
+                <StandardButton 
+                  icon={Plus} 
+                  className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
+                  disabled={!currentProject || currentProject.status !== 'active'}
+                  title={!currentProject ? 'Selecione um projeto ativo para criar' : (currentProject.status !== 'active' ? 'Projeto não ativo — ações de criação desabilitadas' : undefined)}
+                >
+                  {quickActionConfig.label}
+                </StandardButton>
               </DialogTrigger>
               <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
                 <FormComponent 

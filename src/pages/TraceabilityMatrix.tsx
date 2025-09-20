@@ -18,13 +18,13 @@ import {
   deleteRequirement,
 } from '@/services/supabaseService';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DetailModal } from '@/components/DetailModal';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { StandardButton } from '@/components/StandardButton';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Link as LinkIcon, Bug as BugIcon, ExternalLink, Cog, Check, X, Search } from 'lucide-react';
+import { Link as LinkIcon, Bug as BugIcon, ExternalLink, Cog, Check, X, Search, Lock } from 'lucide-react';
 import { 
   priorityLabel, 
   priorityBadgeClass, 
@@ -42,7 +42,8 @@ import { InfoPill } from '@/components/InfoPill';
 export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPreferredViewModeChange }: { embedded?: boolean; preferredViewMode?: 'cards'|'list'; onPreferredViewModeChange?: (m: 'cards'|'list') => void; }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { currentProject } = useProject();
+  const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const { hasPermission } = usePermissions();
   const navigate = useNavigate();
   const [requirements, setRequirements] = useState<Requirement[]>([]);
@@ -68,7 +69,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
     if (user) {
       bootstrap();
     }
-  }, [user, currentProject?.id]);
+  }, [user, currentProject?.id, projects]);
 
   useEffect(() => {
     localStorage.setItem('traceability_viewMode', viewMode);
@@ -84,27 +85,37 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
   const bootstrap = async () => {
     try {
       setLoading(true);
-      const [reqs, cases, defectsProj, defectsAll, execProj, execAll] = await Promise.all([
-        currentProject?.id ? getRequirementsByProject(user!.id, currentProject.id) : getRequirements(user!.id),
-        currentProject?.id ? getTestCasesByProject(user!.id, currentProject.id) : getTestCases(user!.id),
-        currentProject?.id ? getDefectsByProject(user!.id, currentProject.id) : Promise.resolve([]),
-        getDefects(user!.id),
-        currentProject?.id ? getTestExecutionsByProject(user!.id, currentProject.id) : Promise.resolve([]),
-        getTestExecutions(user!.id),
-      ]);
+      let reqs: Requirement[] = [];
+      let cases: TestCase[] = [];
+      let defects: any[] = [];
+      let executions: any[] = [];
 
-      // Deduplicar por id
-      const defectsMap = new Map<string, any>();
-      [...(defectsProj as any[]), ...(defectsAll as any[])].forEach((d: any) => {
-        if (d?.id && !defectsMap.has(d.id)) defectsMap.set(d.id, d);
-      });
-      const defects = Array.from(defectsMap.values());
+      if (currentProject?.id) {
+        const [r, c, d, e] = await Promise.all([
+          getRequirementsByProject(user!.id, currentProject.id),
+          getTestCasesByProject(user!.id, currentProject.id),
+          getDefectsByProject(user!.id, currentProject.id),
+          getTestExecutionsByProject(user!.id, currentProject.id),
+        ]);
+        reqs = r; cases = c; defects = d as any[]; executions = e as any[];
+      } else {
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length > 0) {
+          const [rLists, cLists, dLists, eLists] = await Promise.all([
+            Promise.all(active.map(p => getRequirementsByProject(user!.id, p.id))),
+            Promise.all(active.map(p => getTestCasesByProject(user!.id, p.id))),
+            Promise.all(active.map(p => getDefectsByProject(user!.id, p.id))),
+            Promise.all(active.map(p => getTestExecutionsByProject(user!.id, p.id))),
+          ]);
+          reqs = rLists.flat();
+          cases = cLists.flat();
+          defects = dLists.flat() as any[];
+          executions = eLists.flat() as any[];
+        } else {
+          reqs = []; cases = []; defects = []; executions = [];
+        }
+      }
 
-      const execMap = new Map<string, any>();
-      [...(execProj as any[]), ...(execAll as any[])].forEach((e: any) => {
-        if (e?.id && !execMap.has(e.id)) execMap.set(e.id, e);
-      });
-      const executions = Array.from(execMap.values());
       setRequirements(reqs);
       setAllCases(cases);
 
@@ -187,6 +198,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
 
   const toggleLink = async (reqId: string, caseId: string) => {
     if (!user) return;
+    if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Edição de vínculos desabilitada.', variant: 'destructive' }); return; }
     try {
       setSaving(true);
       if (isLinked(reqId, caseId)) {
@@ -342,7 +354,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                           <InfoPill
                             icon={LinkIcon}
                             value={linkedCount}
-                            title={hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão para gerenciar'}
+                            title={isProjectInactive ? 'Projeto não ativo — gerenciar desabilitado' : (hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão para gerenciar')}
                             className="h-5 w-[40px] px-1.5 text-[11px]"
                             ariaLabel="Gerenciar vínculos"
                           />
@@ -402,7 +414,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                     <div className="flex items-center justify-center"><Badge className={requirementStatusBadgeClass(req.status)}>{requirementStatusLabel(req.status)}</Badge></div>
                     <div className="grid grid-cols-[40px_40px] items-center justify-center justify-items-center gap-2">
                       <span
-                        onClick={(e) => { e.stopPropagation(); if (hasPermission('can_manage_cases')) openManage(req.id); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
+                        onClick={(e) => { e.stopPropagation(); if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Gerenciamento desabilitado.', variant: 'destructive' }); return; } if (hasPermission('can_manage_cases')) openManage(req.id); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
                         className="inline-flex"
                       >
                         <InfoPill
@@ -509,21 +521,32 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                     return (
                       <div key={c.id} className="flex items-center justify-between p-2 border rounded-md">
                         <div className="text-sm">
-                          <div className="font-medium flex items-center gap-2">
+                          <div className="flex items-center gap-3">
                             <span className="text-xs text-gray-500">#{c.sequence ?? c.id.slice(0, 8)}</span>
                             {c.title}
                           </div>
                           <div className="text-gray-500 text-xs line-clamp-1">{c.description}</div>
                         </div>
-                        <StandardButton
-                          size="sm"
-                          variant={linked ? 'secondary' : 'outline'}
-                          icon={linked ? X : Check}
-                          disabled={saving || !hasPermission('can_manage_cases')}
-                          onClick={() => toggleLink(managedRequirement.id, c.id)}
-                        >
-                          {linked ? 'Desvincular' : 'Vincular'}
-                        </StandardButton>
+                        {!currentProject || currentProject.status === 'active' ? (
+                          <StandardButton
+                            size="sm"
+                            variant={linked ? 'secondary' : 'outline'}
+                            icon={linked ? X : Check}
+                            disabled={saving || !hasPermission('can_manage_cases')}
+                            onClick={() => toggleLink(managedRequirement.id, c.id)}
+                          >
+                            {linked ? 'Desvincular' : 'Vincular'}
+                          </StandardButton>
+                        ) : (
+                          <StandardButton
+                            size="sm"
+                            variant="outline"
+                            icon={Lock}
+                            disabled
+                          >
+                            Projeto não ativo
+                          </StandardButton>
+                        )}
                       </div>
                     );
                   })}

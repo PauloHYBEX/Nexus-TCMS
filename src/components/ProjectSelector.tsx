@@ -12,7 +12,7 @@ export const ProjectSelector: React.FC = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (showArchived && archivedProjects.length === 0) {
+    if (showArchived) {
       refreshArchivedProjects().catch(() => {});
     }
   }, [showArchived]);
@@ -20,7 +20,7 @@ export const ProjectSelector: React.FC = () => {
   const handleProjectChange = (projectId: string) => {
     if (projectId === 'all') {
       setCurrentProject(null);
-      toast({ title: 'Filtro aplicado', description: 'Exibindo dados de todos os projetos ativos/pausados.' });
+      toast({ title: 'Filtro aplicado', description: 'Exibindo dados de todos os projetos ativos.' });
       return;
     }
     if (projectId === 'see_more') {
@@ -61,8 +61,20 @@ export const ProjectSelector: React.FC = () => {
       <div className="flex items-center gap-2">
         <FolderOpen className="h-4 w-4 text-muted-foreground" />
         <Select open={open} onOpenChange={setOpen} value={currentProject?.id || 'all'} onValueChange={handleProjectChange}>
-          <SelectTrigger className="w-[220px] h-8 text-sm border-0 bg-transparent shadow-none focus:ring-0 focus:ring-offset-0 outline-none focus:outline-none">
-            <SelectValue placeholder="Selecione um projeto" />
+          <SelectTrigger className="w-[260px] h-8 text-sm border-0 bg-transparent shadow-none focus:ring-0 focus:ring-offset-0 outline-none focus:outline-none">
+            <div className="flex items-center gap-2 w-full truncate">
+              {currentProject ? (
+                <>
+                  <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: currentProject.color }} />
+                  <span className="truncate">{currentProject.name}</span>
+                  <Badge variant="outline" className={getStatusColor(currentProject.status)}>
+                    {getStatusLabel(currentProject.status)}
+                  </Badge>
+                </>
+              ) : (
+                <span>Todos</span>
+              )}
+            </div>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">
@@ -70,6 +82,18 @@ export const ProjectSelector: React.FC = () => {
                 <span>Todos</span>
               </div>
             </SelectItem>
+            {/* Garante visibilidade do projeto atual mesmo se arquivado/cancelado sem expandir 'Ver +' */}
+            {currentProject && !projects.some(p => p.id === currentProject.id) && !archivedProjects.some(p => p.id === currentProject.id) && (
+              <SelectItem key={`current-${currentProject.id}`} value={currentProject.id}>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: currentProject.color }} />
+                  <span>{currentProject.name}</span>
+                  <Badge variant="outline" className={getStatusColor(currentProject.status)}>
+                    {getStatusLabel(currentProject.status)}
+                  </Badge>
+                </div>
+              </SelectItem>
+            )}
             {projects.length === 0 ? (
               <div className="p-2 text-sm text-muted-foreground text-center">
                 Nenhum projeto disponível

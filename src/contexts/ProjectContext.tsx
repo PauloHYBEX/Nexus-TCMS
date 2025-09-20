@@ -71,21 +71,26 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       const realProjects = await getActiveProjects();
       setProjects(realProjects);
 
-      // Tentar restaurar projeto atual do localStorage
+      // Tentar restaurar projeto atual do localStorage (inclui sentinel 'all')
       const savedId = localStorage.getItem(CURRENT_PROJECT_KEY);
       if (savedId) {
-        const saved = await getProjectById(savedId);
-        if (saved) {
-          setCurrentProjectState(saved);
-          broadcastProjectChange(saved);
-        } else if (realProjects.length > 0) {
-          setCurrentProjectState(realProjects[0]);
-          localStorage.setItem(CURRENT_PROJECT_KEY, realProjects[0].id);
-          broadcastProjectChange(realProjects[0]);
-        } else {
+        if (savedId === 'all') {
           setCurrentProjectState(null);
-          localStorage.removeItem(CURRENT_PROJECT_KEY);
           broadcastProjectChange(null);
+        } else {
+          const saved = await getProjectById(savedId);
+          if (saved) {
+            setCurrentProjectState(saved);
+            broadcastProjectChange(saved);
+          } else if (realProjects.length > 0) {
+            setCurrentProjectState(realProjects[0]);
+            localStorage.setItem(CURRENT_PROJECT_KEY, realProjects[0].id);
+            broadcastProjectChange(realProjects[0]);
+          } else {
+            setCurrentProjectState(null);
+            localStorage.setItem(CURRENT_PROJECT_KEY, 'all');
+            broadcastProjectChange(null);
+          }
         }
       } else {
         // Se não há projeto salvo, selecionar o primeiro disponível
@@ -94,21 +99,21 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
           localStorage.setItem(CURRENT_PROJECT_KEY, realProjects[0].id);
           broadcastProjectChange(realProjects[0]);
         } else {
-          setCurrentProjectState(null);
-          localStorage.removeItem(CURRENT_PROJECT_KEY);
+          localStorage.setItem(CURRENT_PROJECT_KEY, 'all');
           broadcastProjectChange(null);
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar projetos:', error);
-      // Em caso de erro, não usar mocks; limpar estado
-      setProjects([]);
-      setCurrentProjectState(null);
-      localStorage.removeItem(CURRENT_PROJECT_KEY);
-      broadcastProjectChange(null);
-    } finally {
-      setLoading(false);
-    }
+    console.error('Erro ao carregar projetos:', error);
+    // Em caso de erro, não usar mocks; limpar estado
+    setProjects([]);
+    setCurrentProjectState(null);
+    // Persistir 'all' para manter seletor estável
+    try { localStorage.setItem(CURRENT_PROJECT_KEY, 'all'); } catch {}
+    broadcastProjectChange(null);
+  } finally {
+    setLoading(false);
+  }
   };
 
   const setCurrentProject = (project: Project | null) => {
@@ -116,7 +121,8 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     if (project) {
       localStorage.setItem(CURRENT_PROJECT_KEY, project.id);
     } else {
-      localStorage.removeItem(CURRENT_PROJECT_KEY);
+      // Persistir 'Todos' como sentinel
+      localStorage.setItem(CURRENT_PROJECT_KEY, 'all');
     }
     broadcastProjectChange(project);
   };

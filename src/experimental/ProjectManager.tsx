@@ -30,7 +30,7 @@ interface ProjectManagerProps {
 
 export const ProjectManager: React.FC<ProjectManagerProps> = ({ project, open, onOpenChange }) => {
   const { user } = useAuth();
-  const { refreshProjects, setCurrentProject, currentProject } = useProject();
+  const { refreshProjects, setCurrentProject, currentProject, refreshArchivedProjects } = useProject();
   const [showEditForm, setShowEditForm] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -79,6 +79,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ project, open, o
       setFormData((s) => ({ ...s, status: 'canceled' }));
       if (fresh && currentProject?.id === project.id) setCurrentProject(fresh);
       await refreshProjects();
+      try { await refreshArchivedProjects(); } catch {}
       toast({ title: 'Projeto cancelado', description: `O projeto "${project.name}" foi marcado como cancelado.` });
     } catch (error) {
       console.error('Erro ao cancelar projeto:', error);
@@ -91,6 +92,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ project, open, o
       setDeleting(true);
       await deleteProjectCascade(project.id);
       await refreshProjects();
+      try { await refreshArchivedProjects(); } catch {}
       setCurrentProject(null);
 
       toast({
@@ -138,6 +140,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ project, open, o
       setFormData((s) => ({ ...s, status: 'active' }));
       if (fresh && currentProject?.id === project.id) setCurrentProject(fresh);
       await refreshProjects();
+      try { await refreshArchivedProjects(); } catch {}
       toast({ title: 'Projeto retomado', description: `O projeto "${project.name}" voltou ao modo ativo.` });
     } catch (error) {
       console.error('Erro ao retomar projeto:', error);
@@ -156,6 +159,7 @@ export const ProjectManager: React.FC<ProjectManagerProps> = ({ project, open, o
       setFormData((s) => ({ ...s, status: 'archived' }));
       if (fresh && currentProject?.id === project.id) setCurrentProject(fresh);
       await refreshProjects();
+      try { await refreshArchivedProjects(); } catch {}
       toast({ title: 'Projeto arquivado', description: `O projeto "${project.name}" foi arquivado.` });
     } catch (error) {
       console.error('Erro ao arquivar projeto:', error);

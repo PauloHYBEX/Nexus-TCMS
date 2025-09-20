@@ -160,11 +160,33 @@ export const deleteProjectCascade = async (projectId: string): Promise<void> => 
     await supabase.from('defects').delete().eq('project_id', projectId);
   } catch {}
 
-  // 5) Vínculos requisito ↔ caso pertencentes ao projeto
+  // 5) Requisitos do projeto e vínculos requisito↔caso
+  // 5.1) Buscar IDs de requisitos do projeto
+  let requirementIds: string[] = [];
+  try {
+    const { data: reqs, error: reqErr } = await supabase
+      .from('requirements')
+      .select('id')
+      .eq('project_id', projectId);
+    if (reqErr) throw reqErr;
+    requirementIds = (reqs || []).map(r => r.id);
+  } catch {}
+
+  // 5.2) Excluir vínculos por case_id (já filtrado acima) e também por requirement_id
   try {
     if (caseIds.length) {
       await supabase.from('requirements_cases').delete().in('case_id', caseIds);
     }
+  } catch {}
+  try {
+    if (requirementIds.length) {
+      await supabase.from('requirements_cases').delete().in('requirement_id', requirementIds);
+    }
+  } catch {}
+
+  // 5.3) Excluir requisitos do projeto
+  try {
+    await supabase.from('requirements').delete().eq('project_id', projectId);
   } catch {}
 
   // 6) Execuções

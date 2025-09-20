@@ -4,10 +4,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { History as HistoryIcon, FileText, TestTube, PlayCircle, Sparkles, Calendar, Eye, Edit, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { getTestPlans, getTestCases, getTestExecutions, deleteTestPlan, deleteTestCase, deleteTestExecution } from '@/services/supabaseService';
+import { getTestPlans, getTestCases, getTestExecutions, deleteTestPlan, deleteTestCase, deleteTestExecution, getTestCasesByProject, getTestExecutionsByProject } from '@/services/supabaseService';
 import { TestPlan, TestCase, TestExecution } from '@/types';
 import { DetailModal } from '@/components/DetailModal';
 import { useNavigate } from 'react-router-dom';
+import { useProject } from '@/contexts/ProjectContext';
 import { toast } from '@/components/ui/use-toast';
 import { priorityBadgeClass, priorityLabel, executionStatusBadgeClass, executionStatusLabel } from '@/lib/labels';
 
@@ -27,6 +28,8 @@ interface HistoryItem {
 export const History = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
@@ -37,15 +40,36 @@ export const History = () => {
     if (user) {
       loadHistoryData();
     }
-  }, [user]);
+  }, [user, currentProject?.id, projects]);
 
   const loadHistoryData = async () => {
     try {
-      const [plans, cases, executions] = await Promise.all([
-        getTestPlans(user!.id),
-        getTestCases(user!.id),
-        getTestExecutions(user!.id)
-      ]);
+      let plans: TestPlan[] = [];
+      let cases: TestCase[] = [];
+      let executions: TestExecution[] = [];
+
+      if (currentProject?.id) {
+        const [p, c, e] = await Promise.all([
+          getTestPlans(user!.id, currentProject.id),
+          getTestCasesByProject(user!.id, currentProject.id),
+          getTestExecutionsByProject(user!.id, currentProject.id)
+        ]);
+        plans = p; cases = c; executions = e;
+      } else {
+        const active = (projects || []).filter(pr => pr.status === 'active');
+        if (active.length > 0) {
+          const [pLists, cLists, eLists] = await Promise.all([
+            Promise.all(active.map(pj => getTestPlans(user!.id, pj.id))),
+            Promise.all(active.map(pj => getTestCasesByProject(user!.id, pj.id))),
+            Promise.all(active.map(pj => getTestExecutionsByProject(user!.id, pj.id)))
+          ]);
+          plans = pLists.flat();
+          cases = cLists.flat();
+          executions = eLists.flat();
+        } else {
+          plans = []; cases = []; executions = [];
+        }
+      }
 
       const historyItems: HistoryItem[] = [
         ...plans.map(plan => ({
@@ -102,6 +126,7 @@ export const History = () => {
   };
 
   const handleEdit = (item: HistoryItem) => {
+    if (!currentProject || isProjectInactive) return;
     // Redirecionar para a página apropriada com modo de edição
     if (item.type === 'plan') {
       navigate(`/plans?edit=${item.id}`);
@@ -113,6 +138,7 @@ export const History = () => {
   };
 
   const handleDeleteClick = (id: string) => {
+    if (!currentProject || isProjectInactive) return;
     if (confirmDeleteId === id) {
       // Confirmar exclusão
       handleDelete(id, items.find(item => item.id === id)?.type as 'plan' | 'case' | 'execution');
@@ -256,6 +282,7 @@ export const History = () => {
                       <Button 
                         size="sm" 
                         variant="outline"
+                        disabled={!currentProject || isProjectInactive}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEdit(item);
@@ -266,6 +293,7 @@ export const History = () => {
                       <Button 
                         size="sm" 
                         variant={confirmDeleteId === item.id ? "destructive" : "outline"}
+                        disabled={!currentProject || isProjectInactive}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteClick(item.id);

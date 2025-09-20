@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getTestPlans, deleteTestPlan, getPlanLinkedCounts } from '@/services/supabaseService';
 import { TestPlan } from '@/types';
 import { TestPlanForm } from '@/components/forms/TestPlanForm';
-import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
+// Removido seletor de projeto local: o controle é feito globalmente no Dashboard
 import { ProjectDisplayField } from '@/components/ProjectDisplayField';
 import { StandardButton } from '@/components/StandardButton';
 import { useToast } from '@/hooks/use-toast';
@@ -32,6 +32,7 @@ import {
 export const TestPlans = () => {
   const { user } = useAuth();
   const { currentProject, projects, refreshProjects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const { getLabelFor, options } = useStatusOptions(currentProject?.id);
   const { toast } = useToast();
   const [plans, setPlans] = useState<TestPlan[]>([]);
@@ -47,7 +48,7 @@ export const TestPlans = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<string | 'all'>(searchParams.get('status') || 'all');
-  const [filterProject, setFilterProject] = useState<string>(searchParams.get('project') || currentProject?.id || 'all');
+  // Removido filtro de projeto local. Vamos usar currentProject global (ou 'Todos' agregando ativos).
   const [editingPlan, setEditingPlan] = useState<TestPlan | null>(null);
   // Pagination state
   const [page, setPage] = useState<number>(1);
@@ -71,9 +72,18 @@ export const TestPlans = () => {
     if (!user) return;
     try {
       setLoading(true);
-      const projectParam = filterProject === 'all' ? undefined : filterProject;
-      const data = await getTestPlans(user.id, projectParam);
-      setPlans(data);
+      if (currentProject?.id) {
+        const data = await getTestPlans(user.id, currentProject.id);
+        setPlans(data);
+      } else {
+        // Agregar SOMENTE projetos ATIVOS quando "Todos"
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length === 0) setPlans([]);
+        else {
+          const lists = await Promise.all(active.map(p => getTestPlans(user.id, p.id)));
+          setPlans(lists.flat());
+        }
+      }
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
       toast({ title: 'Erro', description: 'Falha ao carregar planos de teste.', variant: 'destructive' });
@@ -87,7 +97,7 @@ export const TestPlans = () => {
     if (user) {
       loadPlans();
     }
-  }, [user, filterProject]);
+  }, [user, currentProject?.id, projects]);
 
   // Abrir modal de visualização automaticamente quando apropriado
   // Regras:
@@ -147,13 +157,7 @@ export const TestPlans = () => {
     setFilterStatus((s as any) || 'all');
   }, [searchParams]);
 
-  // Restaurar filtro de projeto via URL (?project=all|<id>)
-  useEffect(() => {
-    const p = searchParams.get('project');
-    if (p) setFilterProject(p);
-    else if (currentProject?.id) setFilterProject(currentProject.id);
-    else setFilterProject('all');
-  }, [searchParams, currentProject?.id]);
+  // Removido: filtro de projeto via URL. O controle é global.
 
   // Salvar preferência de visualização
   useEffect(() => {
@@ -286,15 +290,7 @@ export const TestPlans = () => {
     setSearchParams(params);
   };
 
-  // Atualiza URL ao mudar filtro de projeto
-  const handleProjectFilterChange = (projectId: string) => {
-    setFilterProject(projectId);
-    setPage(1);
-    const params = new URLSearchParams(searchParams);
-    if (projectId && projectId !== 'all') params.set('project', projectId);
-    else params.set('project', 'all');
-    setSearchParams(params);
-  };
+  // Removido: manipulador de filtro de projeto local.
 
   const handlePlanCreated = (plan: TestPlan) => {
     // Garantir tipos de data e evitar duplicatas (upsert)
@@ -356,6 +352,13 @@ export const TestPlans = () => {
 
   const handleDelete = async (id: string) => {
     try {
+      if (isProjectInactive) {
+        toast({ title: 'Projeto não ativo', description: 'Exclusão desabilitada.', variant: 'destructive' });
+        setConfirmDeleteOpen(false);
+        setPlanToDelete(null);
+        setLinkedCounts(null);
+        return;
+      }
       await deleteTestPlan(id);
       await loadPlans();
       // Se o plano deletado estava selecionado no DetailModal, fechar e limpar URL
@@ -523,16 +526,7 @@ export const TestPlans = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Project Filter */}
-          <div className="w-56">
-            <ProjectSelectField
-              value={filterProject}
-              onValueChange={handleProjectFilterChange}
-              includeAllOption
-              allLabel="Todos os projetos"
-              placeholder="Filtrar por projeto"
-            />
-          </div>
+          {/* Seletor de projeto removido: seleção global pelo Dashboard */}
           {/* View Mode Toggle */}
           <div className="flex rounded-lg border border-border overflow-hidden">
             <Button
@@ -763,6 +757,8 @@ export const TestPlans = () => {
                               e.stopPropagation();
                               handleRequestDelete(plan);
                             }}
+                            disabled={!currentProject || isProjectInactive}
+                            title={!currentProject ? 'Selecione um projeto ativo para excluir planos' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

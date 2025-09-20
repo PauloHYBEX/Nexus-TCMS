@@ -17,7 +17,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { priorityBadgeClass, priorityLabel } from '@/lib/labels';
 import { testCaseTypeBadgeClass, testCaseTypeLabel } from '@/lib/labels';
 import { useProject } from '@/contexts/ProjectContext';
-import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
 import { ProjectDisplayField } from '@/components/ProjectDisplayField';
 import {
   AlertDialog,
@@ -34,6 +33,7 @@ export const TestCases = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   
   // Estados principais
   const [cases, setCases] = useState<TestCase[]>([]);
@@ -52,7 +52,6 @@ export const TestCases = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
-  const [filterProject, setFilterProject] = useState<string>(currentProject?.id || 'all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(9);
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -67,23 +66,34 @@ export const TestCases = () => {
     
     try {
       setLoading(true);
-      let data: TestCase[];
-      
-      if (filterProject === 'all' || !filterProject) {
-        data = await getTestCases(user.id);
-      } else {
-        data = await getTestCasesByProject(user.id, filterProject);
-      }
-      
-      setCases(data);
+      let data: TestCase[] = [];
 
-      // Carregar planos para mapear plan_id -> project_id (filtrar por projeto quando aplicável)
-      const plans = await getTestPlans(user.id, filterProject === 'all' ? undefined : filterProject);
-      const map: Record<string, string> = {};
-      plans.forEach((p) => {
-        map[p.id] = p.project_id;
-      });
-      setPlanProjectMap(map);
+      if (currentProject?.id) {
+        data = await getTestCasesByProject(user.id, currentProject.id);
+        const plans = await getTestPlans(user.id, currentProject.id);
+        const map: Record<string, string> = {};
+        plans.forEach((p) => { map[p.id] = p.project_id; });
+        setPlanProjectMap(map);
+      } else {
+        // Agregar APENAS projetos ATIVOS ao usar "Todos"
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length > 0) {
+          const [casesLists, plansLists] = await Promise.all([
+            Promise.all(active.map(p => getTestCasesByProject(user.id, p.id))),
+            Promise.all(active.map(p => getTestPlans(user.id, p.id)))
+          ]);
+          data = casesLists.flat();
+          const plans = plansLists.flat();
+          const map: Record<string, string> = {};
+          plans.forEach((p) => { map[p.id] = p.project_id; });
+          setPlanProjectMap(map);
+        } else {
+          data = [];
+          setPlanProjectMap({});
+        }
+      }
+
+      setCases(data);
     } catch (error) {
       console.error('Erro ao carregar casos:', error);
       toast({ 
@@ -99,27 +109,20 @@ export const TestCases = () => {
   // Efeito para carregar casos quando projeto muda
   useEffect(() => {
     loadCases();
-  }, [user, filterProject]);
+  }, [user, currentProject?.id, projects]);
 
-  // Sincronizar filtro de projeto com projeto atual
-  useEffect(() => {
-    if (currentProject) {
-      setFilterProject(currentProject.id);
-    } else {
-      setFilterProject('all');
-    }
-  }, [currentProject]);
+  // Removido filtro de projeto local: controle é global pelo Dashboard
 
   // Salvar modo de visualização
   useEffect(() => {
     localStorage.setItem('testCases_viewMode', viewMode);
   }, [viewMode]);
 
-  // Listener para broadcast de troca de projeto
+  // Listener para broadcast de troca de projeto (padronizado)
   useEffect(() => {
     const handler = () => loadCases();
-    window.addEventListener('project-changed', handler);
-    return () => window.removeEventListener('project-changed', handler);
+    window.addEventListener('krg:project-changed', handler as EventListener);
+    return () => window.removeEventListener('krg:project-changed', handler as EventListener);
   }, []);
 
   // Sincronizar modal de detalhes com a URL (?id=...&modal=case:view)
@@ -202,10 +205,7 @@ export const TestCases = () => {
     setCurrentPage(1);
   };
 
-  const handleProjectFilterChange = (value: string) => {
-    setFilterProject(value);
-    setCurrentPage(1);
-  };
+  // Removido: manipulação de filtro de projeto local
 
   // Handlers
   const handleCaseCreated = (testCase: TestCase) => {
@@ -244,6 +244,13 @@ export const TestCases = () => {
 
   const performDeleteCase = async () => {
     if (!deletingCaseId) return;
+    if (isProjectInactive) {
+      toast({ title: 'Projeto não ativo', description: 'Exclusão desabilitada.', variant: 'destructive' });
+      setConfirmDeleteOpen(false);
+      setDeletingCaseId(null);
+      setCaseLinkedCounts(null);
+      return;
+    }
     try {
       if (caseLinkedCounts && (caseLinkedCounts.executionCount > 0 || caseLinkedCounts.defectCount > 0)) {
         toast({
@@ -332,16 +339,7 @@ export const TestCases = () => {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Project Filter */}
-          <div className="w-56">
-            <ProjectSelectField
-              value={filterProject}
-              onValueChange={handleProjectFilterChange}
-              includeAllOption
-              allLabel="Todos os projetos"
-              placeholder="Filtrar por projeto"
-            />
-          </div>
+          {/* Seletor de projeto removido — seleção global pelo Dashboard */}
           
           {/* View Mode Toggle */}
           <div className="flex rounded-lg border border-border overflow-hidden">
@@ -569,6 +567,8 @@ export const TestCases = () => {
                           handleDelete(testCase.id);
                         }}
                         className="h-8 w-8 p-0"
+                        disabled={!currentProject || isProjectInactive}
+                        title={!currentProject ? 'Selecione um projeto ativo para excluir casos' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

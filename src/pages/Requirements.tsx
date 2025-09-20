@@ -32,7 +32,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 export const Requirements = ({ embedded = false, preferredViewMode, onPreferredViewModeChange }: { embedded?: boolean; preferredViewMode?: 'cards' | 'list'; onPreferredViewModeChange?: (m: 'cards'|'list') => void; }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { currentProject } = useProject();
+  const { currentProject, projects } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const { hasPermission } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
     if (user) {
       loadData();
     }
-  }, [user, currentProject?.id]);
+  }, [user, currentProject?.id, projects]);
 
   useEffect(() => {
     localStorage.setItem('requirements_viewMode', viewMode);
@@ -116,10 +117,19 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = currentProject?.id
-        ? await getRequirementsByProject(user!.id, currentProject.id)
-        : await getRequirements(user!.id);
-      setRequirements(data);
+      if (currentProject?.id) {
+        const data = await getRequirementsByProject(user!.id, currentProject.id);
+        setRequirements(data);
+      } else {
+        // Agregar SOMENTE projetos ATIVOS quando "Todos"
+        const active = (projects || []).filter(p => p.status === 'active');
+        if (active.length === 0) {
+          setRequirements([]);
+        } else {
+          const lists = await Promise.all(active.map(p => getRequirementsByProject(user!.id, p.id)));
+          setRequirements(lists.flat());
+        }
+      }
     } catch (e: any) {
       toast({ title: 'Erro', description: e.message || 'Falha ao carregar requisitos', variant: 'destructive' });
     } finally {
@@ -347,7 +357,8 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
                 <StandardButton variant="outline" onClick={closeForm}>Cancelar</StandardButton>
                 <StandardButton 
                   onClick={submit}
-                  disabled={!hasPermission('can_manage_cases')}
+                  disabled={!hasPermission('can_manage_cases') || !currentProject || isProjectInactive}
+                  title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação/edição desabilitada' : undefined)}
                   className={!editing ? 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0' : ''}
                 >
                   {editing ? 'Salvar' : 'Criar'}
