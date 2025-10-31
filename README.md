@@ -127,8 +127,8 @@ supabase link --project-ref mhhzdykyjgrnprcyhlbz
 
 # Configure os secrets
 supabase functions secrets set \
-  --project-ref mhhzdykyjgrnprcyhlbz \
-  SUPABASE_URL="https://mhhzdykyjgrnprcyhlbz.supabase.co" \
+  --project-ref asdasd12312312 \
+  SUPABASE_URL="https://sdadsdasd123123.supabase.co" \
   SUPABASE_ANON_KEY="sua-anon-key" \
   SUPABASE_SERVICE_ROLE_KEY="sua-service-role-key"
 
