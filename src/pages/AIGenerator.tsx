@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Sparkles, Files, FileText, TestTube, PlayCircle, ChevronRight, Eye, ArrowLeft } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Sparkles, Files, FileText, TestTube, PlayCircle, Eye, Info, User, Layers } from 'lucide-react';
 import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 import { AIBatchGeneratorForm } from '@/components/forms/AIBatchGeneratorForm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { AIBatchModal } from '@/components/AIBatchModal';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface GeneratedItem {
   id: string;
@@ -56,8 +58,7 @@ export const AIGenerator = () => {
   const navigate = useNavigate();
   // Modo local da página (sem localStorage): 'individual' ou 'batch'
   const [batchMode, setBatchMode] = useState<'individual' | 'batch'>('individual');
-  // Modo específico do card de Plano: alterna visualmente entre geração em lote e "plano único com casos"
-  const [planCardMode, setPlanCardMode] = useState<'batch' | 'plan-with-cases'>('batch');
+  // Layout simplificado: geração individual ou em lote controlado pelos ícones do cabeçalho
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, loading } = usePermissions();
 
@@ -133,368 +134,235 @@ export const AIGenerator = () => {
     setShowPlanDetails(true);
   };
 
-  if (showForm) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => { setShowForm(false); setSearchParams({}); }}>
-            <ArrowLeft className="h-4 w-4" />
-            Voltar
-          </Button>
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {(batchMode === 'batch' && generationType === 'plan') ? 'Gerar Vários Planos de Teste com IA' :
-             (batchMode === 'batch' && generationType === 'case') ? 'Gerar Vários Casos de Teste com IA' :
-              `Gerar ${generationType === 'plan' ? 'Plano' : generationType === 'case' ? 'Caso' : 'Execução'} de Teste com IA`
-            }
-          </h2>
-        </div>
-        
-        {(batchMode === 'batch' && (generationType === 'plan' || generationType === 'case')) ? (
-          <AIBatchGeneratorForm onSuccess={handleGenerationSuccess} type={generationType} />
-        ) : (
-          <AIGeneratorForm onSuccess={handleGenerationSuccess} initialType={generationType} />
-        )}
-      </div>
-    );
-  }
+  // Modal de criação (substitui o retorno condicional anterior)
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div className="text-center flex-1">
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Gerador IA</h2>
-          <p className="text-gray-600 dark:text-gray-400">
-            Use inteligência artificial para gerar planos, casos e execuções de teste automaticamente
-          </p>
-        </div>
-        <div className="hidden md:flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Modo</span>
-          <div className="p-1 rounded-lg border">
-            <Button
-              size="sm"
-              variant={batchMode === 'individual' ? 'default' : 'outline'}
-              aria-pressed={batchMode === 'individual'}
-              onClick={() => setBatchMode('individual')}
-            >
-              Individual
-            </Button>
-            <Button
-              size="sm"
-              variant={batchMode === 'batch' ? 'default' : 'outline'}
-              aria-pressed={batchMode === 'batch'}
-              onClick={() => setBatchMode('batch')}
-              className="ml-1"
-            >
-              Em lote
-            </Button>
-          </div>
-        </div>
-      </div>
-      <div className="md:hidden flex justify-center">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Modo</span>
-          <div className="p-1 rounded-lg border">
-            <Button
-              size="sm"
-              variant={batchMode === 'individual' ? 'default' : 'outline'}
-              aria-pressed={batchMode === 'individual'}
-              onClick={() => setBatchMode('individual')}
-            >
-              Individual
-            </Button>
-            <Button
-              size="sm"
-              variant={batchMode === 'batch' ? 'default' : 'outline'}
-              aria-pressed={batchMode === 'batch'}
-              onClick={() => setBatchMode('batch')}
-              className="ml-1"
-            >
-              Em lote
-            </Button>
-          </div>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Gerador IA</h2>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button aria-label="Como funciona" className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand))]">
+                  <Info className="h-4 w-4" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="space-y-2 max-w-sm">
+                  <div className="text-sm font-medium">Como funciona</div>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal pl-4">
+                    <li>Descreva seu projeto ou forneça um documento</li>
+                    <li>A IA analisa e gera planos/casos/execuções</li>
+                    <li>Revise, ajuste e salve</li>
+                  </ol>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+        <div className="flex items-center gap-1">
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={batchMode === 'individual' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  aria-label="Modo individual"
+                  aria-pressed={batchMode === 'individual'}
+                  onClick={() => setBatchMode('individual')}
+                >
+                  <User className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Individual</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={batchMode === 'batch' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  aria-label="Modo em lote"
+                  aria-pressed={batchMode === 'batch'}
+                  onClick={() => setBatchMode('batch')}
+                >
+                  <Layers className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Em lote</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
       {/* Skeleton enquanto permissões carregam */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-          <div className="h-[300px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
-          <div className="h-[300px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
-          <div className="h-[300px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
+          <div className="h-[120px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
+          <div className="h-[120px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
+          <div className="h-[120px] rounded-xl border bg-gray-200/60 dark:bg-gray-800/60 animate-pulse" />
         </div>
       ) : (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
-        <Card
-          className={`group relative text-center transition-colors border hover:shadow-md rounded-xl h-[300px] flex flex-col overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${planDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          role="button"
-          tabIndex={planDisabled ? -1 : 0}
-          aria-disabled={planDisabled}
-          aria-label={batchMode === 'batch' ? 'Gerar Vários Planos' : 'Gerar Plano de Teste'}
-          onKeyDown={(e) => {
-            if (planDisabled) return;
-            // Evita acionar via teclado quando o foco estiver no botão do ícone
-            const active = document.activeElement as HTMLElement | null;
-            if (active && active.closest('[data-role="plan-with-cases-trigger"]')) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setGenerationType('plan');
-              setShowForm(true);
-              setSearchParams({ type: 'plan' });
-            }
-          }}
-          onClick={(e) => {
-            if (planDisabled) return;
-            // Se o clique partiu do ícone, não abre o fluxo padrão
-            const target = e.target as HTMLElement | null;
-            if (target && target.closest('[data-role="plan-with-cases-trigger"]')) return;
-            setGenerationType('plan');
-            setShowForm(true);
-            setSearchParams({ type: 'plan' });
-          }}
-        >
-          {/* Flip container com layout compacto (igual aos demais cards) */}
-          <div className={`relative h-full w-full flip-card`}>
-            <div className="flip-inner">
-              {/* Botão do modal dedicado posicionado acima das faces (mesmo stacking context) */}
-              {!planDisabled && (
-                <button
-                  type="button"
-                  className="absolute top-3 right-3 z-30 p-2 rounded-md bg-transparent opacity-70 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-primary"
-                  title={'Abrir Plano Único com Casos (IA)'}
-                  aria-label="Abrir Plano Único com Casos (IA)"
-                  data-role="plan-with-cases-trigger"
-                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
-                  onKeyDown={(e) => { e.stopPropagation(); }}
-                  onClick={(e) => {
-                    e.stopPropagation();
+        <div className="max-w-3xl mx-auto">
+          <Card className="overflow-hidden rounded-2xl">
+            <div className="divide-y">
+              {/* Plano */}
+              <div
+                className={`relative grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors ${planDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                role="button"
+                tabIndex={planDisabled ? -1 : 0}
+                aria-disabled={planDisabled}
+                aria-label={batchMode === 'batch' ? 'Gerar Vários Planos' : 'Gerar Plano de Teste'}
+                onKeyDown={(e) => {
+                  if (planDisabled) return;
+                  const active = document.activeElement as HTMLElement | null;
+                  if (active && active.closest('[data-role="plan-with-cases-trigger"]')) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    setShowPlanWithCasesModal(true);
-                  }}
-                >
-                  <Files className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </button>
-              )}
-              {/* Frente: segue o modo global (Individual/Lote) */}
-              <div className="flip-face flip-front flex flex-col h-full">
-                <CardHeader className="p-4 pb-3">
-                  <div className="mx-auto mb-3 p-4 bg-blue-100 dark:bg-blue-900 rounded-full w-fit">
-                    {batchMode === 'batch' ? (
-                      <Files className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                    ) : (
-                      <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                    )}
-                  </div>
-                  <CardTitle className="flex items-center justify-center gap-2 text-lg">
-                    <Sparkles className="h-5 w-5" />
+                    setGenerationType('plan');
+                    setShowForm(true);
+                    setSearchParams({ type: 'plan' });
+                  }
+                }}
+                onClick={(e) => {
+                  if (planDisabled) return;
+                  const target = e.target as HTMLElement | null;
+                  if (target && target.closest('[data-role="plan-with-cases-trigger"]')) return;
+                  setGenerationType('plan');
+                  setShowForm(true);
+                  setSearchParams({ type: 'plan' });
+                }}
+              >
+                <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900">
+                  {batchMode === 'batch' ? (
+                    <Files className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  ) : (
+                    <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  )}
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold flex items-center justify-center gap-2">
+                    <Sparkles className="h-4 w-4" />
                     {batchMode === 'batch' ? 'Gerar Vários Planos' : 'Gerar Plano de Teste'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 flex flex-col flex-1">
-                  <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
-                    {batchMode === 'batch'
-                      ? 'Analise documentos e gere múltiplos planos de teste automaticamente'
-                      : 'Crie planos de teste completos baseados na descrição do seu projeto'}
-                  </p>
-                  <div className="mt-auto text-sm font-medium text-primary flex items-center justify-center">
-                    Começar geração
-                    <ChevronRight className="ml-1 h-4 w-4" />
                   </div>
-                </CardContent>
+                </div>
+                {!planDisabled && (
+                  <button
+                    type="button"
+                    className="ml-auto h-9 w-9 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--brand))]"
+                    title="Plano Único com Casos (IA)"
+                    aria-label="Plano Único com Casos (IA)"
+                    data-role="plan-with-cases-trigger"
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onKeyDown={(e) => { e.stopPropagation(); }}
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); setShowPlanWithCasesModal(true); }}
+                  >
+                    <Files className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </button>
+                )}
               </div>
 
-              {/* Verso: Plano Único com Casos (IA) */}
-              <div className="flip-face flip-back flex flex-col h-full">
-                <CardHeader className="p-4 pb-3">
-                  <div className="mx-auto mb-3 p-4 bg-blue-100 dark:bg-blue-900 rounded-full w-fit">
-                    <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              {/* Casos */}
+              <div
+                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                role="button"
+                tabIndex={caseDisabled ? -1 : 0}
+                aria-disabled={caseDisabled}
+                aria-label={batchMode === 'batch' ? 'Gerar Vários Casos' : 'Gerar Casos de Teste'}
+                onKeyDown={(e) => {
+                  if (caseDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setGenerationType('case');
+                    setShowForm(true);
+                    setSearchParams({ type: 'case' });
+                  }
+                }}
+                onClick={() => {
+                  if (!canGenerateCase || caseDisabled) return;
+                  setGenerationType('case');
+                  setShowForm(true);
+                  setSearchParams({ type: 'case' });
+                }}
+              >
+                <div className="p-3 rounded-xl bg-green-100 dark:bg-green-900">
+                  {batchMode === 'batch' ? (
+                    <Files className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  ) : (
+                    <TestTube className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  )}
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold flex items-center justify-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    {batchMode === 'batch' ? 'Gerar Vários Casos' : 'Gerar Casos de Teste'}
                   </div>
-                  <CardTitle className="flex items-center justify-center gap-2 text-lg">
-                    <Sparkles className="h-5 w-5" />
-                    Plano Único com Casos (IA)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-4 pt-0 flex flex-col flex-1">
-                  <p className="text-muted-foreground text-sm line-clamp-2 mb-2">
-                    Consolide um plano e gere múltiplos casos a partir de uma tabela/descrição
-                  </p>
-                  <div className="mt-auto text-sm font-medium text-primary flex items-center justify-center">
-                    Abrir modal
-                    <ChevronRight className="ml-1 h-4 w-4" />
+                </div>
+              </div>
+
+              {/* Execução */}
+              <div
+                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                role="button"
+                tabIndex={executionDisabled ? -1 : 0}
+                aria-disabled={executionDisabled}
+                aria-label={'Gerar Execução de Teste'}
+                onKeyDown={(e) => {
+                  if (executionDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setGenerationType('execution');
+                    setShowForm(true);
+                    setSearchParams({ type: 'execution' });
+                  }
+                }}
+                onClick={() => {
+                  if (executionDisabled) return;
+                  setGenerationType('execution');
+                  setShowForm(true);
+                  setSearchParams({ type: 'execution' });
+                }}
+              >
+                <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900">
+                  <PlayCircle className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold flex items-center justify-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    Gerar Execução de Teste
                   </div>
-                </CardContent>
+                </div>
               </div>
             </div>
-          </div>
-          {(planDisabled) && (
-            <div className="absolute inset-0 bg-black/30 text-white flex items-center justify-center rounded-xl">
-              {loading ? 'Carregando permissões...' : 'Sem permissão'}
-            </div>
-          )}
-        </Card>
-
-        <Card
-          className={`group relative text-center transition-colors border hover:shadow-md rounded-xl h-[300px] flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          role="button"
-          tabIndex={caseDisabled ? -1 : 0}
-          aria-disabled={caseDisabled}
-          aria-label={batchMode === 'batch' ? 'Gerar vários casos de teste' : 'Gerar casos de teste'}
-          onKeyDown={(e) => {
-            if (caseDisabled) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setGenerationType('case');
-              setShowForm(true);
-              setSearchParams({ type: 'case' });
-            }
-          }}
-          onClick={() => {
-            if (!canGenerateCase || caseDisabled) return;
-            setGenerationType('case');
-            setShowForm(true);
-            setSearchParams({ type: 'case' });
-          }}
-        >
-          <CardHeader className="pb-4 flex-shrink-0">
-            <div className="mx-auto mb-4 p-4 bg-green-100 dark:bg-green-900 rounded-full w-fit">
-              {batchMode === 'batch' ? (
-                <Files className="h-8 w-8 text-green-600 dark:text-green-400" />
-              ) : (
-              <TestTube className="h-8 w-8 text-green-600 dark:text-green-400" />
-              )}
-            </div>
-            <CardTitle className="flex items-center justify-center gap-2 text-lg">
-              <Sparkles className="h-5 w-5" />
-              {batchMode === 'batch' ? 'Gerar Vários Casos' : 'Gerar Casos de Teste'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-1 flex-1 flex items-center justify-center">
-              {batchMode === 'batch' 
-                ? 'Analise documentos em múltiplos formatos e gere casos de teste automaticamente'
-                : 'Gere casos de teste detalhados para funcionalidades específicas'
-              }
-            </p>
-            <div className="mt-2 text-sm font-medium text-primary flex items-center justify-center">
-              Começar geração
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </div>
-          </CardContent>
-          {(caseDisabled) && (
-            <div className="absolute inset-0 bg-black/30 text-white flex items-center justify-center rounded-xl">
-              {loading ? 'Carregando permissões...' : 'Sem permissão'}
-            </div>
-          )}
-        </Card>
-
-        <Card
-          className={`group relative text-center transition-colors border hover:shadow-md rounded-xl h-[300px] flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-          role="button"
-          tabIndex={executionDisabled ? -1 : 0}
-          aria-disabled={executionDisabled}
-          aria-label={'Gerar execução de teste'}
-          onKeyDown={(e) => {
-            if (executionDisabled) return;
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setGenerationType('execution');
-              setShowForm(true);
-              setSearchParams({ type: 'execution' });
-            }
-          }}
-          onClick={() => {
-            if (executionDisabled) return;
-            setGenerationType('execution');
-            setShowForm(true);
-            setSearchParams({ type: 'execution' });
-          }}
-        >
-          <CardHeader className="pb-4 flex-shrink-0">
-            <div className="mx-auto mb-4 p-4 bg-purple-100 dark:bg-purple-900 rounded-full w-fit">
-              <PlayCircle className="h-8 w-8 text-purple-600 dark:text-purple-400" />
-            </div>
-            <CardTitle className="flex items-center justify-center gap-2 text-lg">
-              <Sparkles className="h-5 w-5" />
-              Gerar Execução de Teste
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-between">
-            <p className="text-gray-600 dark:text-gray-400 text-sm mb-1 flex-1 flex items-center justify-center">
-              Simule execuções de teste automaticamente baseadas em casos existentes
-            </p>
-            <div className="mt-2 text-sm font-medium text-primary flex items-center justify-center">
-              Começar geração
-              <ChevronRight className="ml-1 h-4 w-4" />
-            </div>
-          </CardContent>
-          {(executionDisabled) && (
-            <div className="absolute inset-0 bg-black/30 text-white flex items-center justify-center rounded-xl">
-              {loading ? 'Carregando permissões...' : 'Sem permissão'}
-            </div>
-          )}
-        </Card>
-      </div>
+          </Card>
+        </div>
       )}
-
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>
-              <Sparkles />
-              Como funciona?
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-[2rem_1fr] items-start gap-3">
-                <div className="bg-blue-100 dark:bg-blue-900 rounded-full w-8 h-8 flex items-center justify-center">
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">1</span>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium leading-6">
-                    {batchMode === 'batch' ? 'Forneça o documento' : 'Descreva seu projeto'}
-                  </h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {batchMode === 'batch' 
-                      ? 'Cole ou faça upload do documento com as especificações do sistema'
-                      : 'Forneça informações sobre o sistema que será testado'
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-[2rem_1fr] items-start gap-3">
-                <div className="bg-blue-100 dark:bg-blue-900 rounded-full w-8 h-8 flex items-center justify-center">
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">2</span>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium leading-6">IA analisa e gera</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {batchMode === 'batch' 
-                      ? 'Nossa IA identifica automaticamente diferentes funcionalidades e gera planos específicos'
-                      : 'Nossa IA cria planos, casos e execuções de teste personalizados'
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-[2rem_1fr] items-start gap-3">
-                <div className="bg-blue-100 dark:bg-blue-900 rounded-full w-8 h-8 flex items-center justify-center">
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">3</span>
-                </div>
-                <div className="space-y-1">
-                  <h4 className="text-sm font-medium leading-6">Revise e execute</h4>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {batchMode === 'batch' 
-                      ? 'Aprove, rejeite ou refaça cada plano individualmente antes de salvar'
-                      : 'Ajuste conforme necessário e execute seus testes'
-                    }
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
+      {/* Modal de Criação (Formulários) */}
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) setSearchParams({}); }}>
+        <DialogContent className="max-w-4xl" aria-describedby="ai-create-desc">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {generationType === 'plan' ? <FileText className="h-5 w-5" /> : generationType === 'case' ? <TestTube className="h-5 w-5" /> : <PlayCircle className="h-5 w-5" />}
+              {(batchMode === 'batch' && generationType === 'plan') ? 'Gerar Vários Planos de Teste com IA' :
+               (batchMode === 'batch' && generationType === 'case') ? 'Gerar Vários Casos de Teste com IA' :
+                `Gerar ${generationType === 'plan' ? 'Plano' : generationType === 'case' ? 'Caso' : 'Execução'} de Teste com IA`}
+            </DialogTitle>
+            <DialogDescription id="ai-create-desc" className="sr-only">
+              Criar artefatos de teste com IA
+            </DialogDescription>
+          </DialogHeader>
+          <div className="pt-2">
+            {(batchMode === 'batch' && (generationType === 'plan' || generationType === 'case')) ? (
+              <AIBatchGeneratorForm onSuccess={handleGenerationSuccess} type={generationType} />
+            ) : (
+              <AIGeneratorForm onSuccess={handleGenerationSuccess} initialType={generationType} />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <AIBatchModal
         isOpen={showBatchModal}
         onClose={() => setShowBatchModal(false)}

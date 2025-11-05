@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Moon, Sun, Settings, User, LogOut, Shield, Info, Bell } from 'lucide-react';
 import KrigzisLogo from '@/components/branding/KrigzisLogo';
+import { ProjectPicker } from '@/components/ProjectPicker';
 import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -111,6 +112,9 @@ export const Header = () => {
             <p className="text-sm text-muted-foreground hidden lg:block">
               Geração inteligente de testes
             </p>
+            <div className="hidden md:block ml-4">
+              <ProjectPicker />
+            </div>
           </div>
 
           <div className="flex items-center space-x-1">

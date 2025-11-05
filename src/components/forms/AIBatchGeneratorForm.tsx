@@ -18,6 +18,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAISettings } from '@/hooks/useAISettings';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface AIBatchGeneratorFormProps {
   onSuccess?: (data: any) => void;
@@ -31,6 +32,7 @@ interface AIBatchGeneratorFormProps {
 export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standard' }: AIBatchGeneratorFormProps) => {
   const { user } = useAuth();
   const { settings, updateSettings } = useAISettings();
+  const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [documentContent, setDocumentContent] = useState('');
   const [context, setContext] = useState('');
@@ -152,7 +154,8 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
   const generatePlanWithCases = async (
     documentContent: string,
     context?: string,
-    userId?: string
+    userId?: string,
+    projectId?: string
   ) => {
     const prompt = `
       Você receberá um texto ou TABELA com colunas como funcionalidades, objetivos, escopo, ambiente, branches e testes/casos.
@@ -251,6 +254,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
             order: idx + 1,
           })),
           user_id: userId,
+          project_id: projectId,
           generated_by_ai: true,
           created_at: new Date(),
           updated_at: new Date(),
@@ -319,6 +323,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
         schedule: '',
         risks: '',
         user_id: userId,
+        project_id: projectId,
         generated_by_ai: true,
         created_at: new Date(),
         updated_at: new Date(),
@@ -337,10 +342,11 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
     cases: any[],
   ) => {
     try {
+      const planWithProject = { ...plan, project_id: plan?.project_id ?? currentProject?.id };
       // Inserir plano e recuperar ID
       const { data: insertedPlans, error: planErr } = await supabase
         .from('test_plans')
-        .insert(plan)
+        .insert(planWithProject)
         .select()
         .limit(1);
       if (planErr) throw planErr;
@@ -348,7 +354,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
       if (!planId) throw new Error('Falha ao obter ID do plano inserido');
 
       // Vincular plan_id aos casos e inserir
-      const casesToInsert = cases.map((c) => ({ ...c, plan_id: planId }));
+      const casesToInsert = cases.map((c) => ({ ...c, plan_id: planId, project_id: c?.project_id ?? currentProject?.id }));
       const { error: casesErr } = await supabase
         .from('test_cases')
         .insert(casesToInsert);
@@ -570,16 +576,17 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
 
   const saveCasesToSupabase = async (cases: any[]) => {
     try {
+      const payload = cases.map((c) => ({ ...c, project_id: c?.project_id ?? currentProject?.id }));
       const { data, error } = await supabase
         .from('test_cases')
-        .insert(cases);
+        .insert(payload);
         
       if (error) throw error;
       
       return {
         success: true, 
-        cases,
-        count: cases.length
+        cases: payload,
+        count: payload.length
       };
     } catch (error) {
       console.error('Erro ao salvar casos em lote:', error);
@@ -589,16 +596,17 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
 
   const savePlansToSupabase = async (plans: any[]) => {
     try {
+      const payload = plans.map((p) => ({ ...p, project_id: p?.project_id ?? currentProject?.id }));
       const { data, error } = await supabase
         .from('test_plans')
-        .insert(plans);
+        .insert(payload);
         
       if (error) throw error;
       
       return {
         success: true, 
-        plans,
-        count: plans.length
+        plans: payload,
+        count: payload.length
       };
     } catch (error) {
       console.error('Erro ao salvar planos em lote:', error);
@@ -609,6 +617,10 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !documentContent.trim()) return;
+    if (!currentProject?.id) {
+      toast({ title: 'Selecione um projeto', description: 'Selecione um projeto no topo antes de gerar.', variant: 'destructive' });
+      return;
+    }
 
     setLoading(true);
     try {
@@ -628,7 +640,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
       } else {
         if (mode === 'plan-with-cases') {
           // Gerar um único plano com múltiplos casos
-          const { plan, cases } = await generatePlanWithCases(documentContent, context, user.id);
+          const { plan, cases } = await generatePlanWithCases(documentContent, context, user.id, currentProject.id);
           const result = await savePlanWithCasesToSupabase(plan, cases);
           toast({
             title: 'Sucesso',
@@ -671,6 +683,13 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6" aria-busy={loading}>
+          {currentProject?.name ? (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Projeto: {currentProject.name}</Badge>
+            </div>
+          ) : (
+            <div className="text-sm text-amber-600">Selecione um projeto no topo antes de gerar.</div>
+          )}
           <div className="space-y-4">
             <div>
               <Label htmlFor="file-upload">Upload de Documento (Opcional)</Label>
@@ -855,7 +874,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
           <div className="flex justify-end">
             <Button 
               type="submit" 
-              disabled={loading || !documentContent.trim()} 
+              disabled={loading || !documentContent.trim() || !currentProject?.id} 
               className="min-w-[200px]"
               aria-busy={loading}
               aria-live="polite"

@@ -32,7 +32,6 @@ import { TestCaseForm } from '@/components/forms/TestCaseForm';
 import { TestExecutionForm } from '@/components/forms/TestExecutionForm';
 import { DetailModal } from '@/components/DetailModal';
 import { StandardButton } from '@/components/StandardButton';
-import { ProjectSelector } from '@/components/ProjectSelector';
 import { useNavigate } from 'react-router-dom';
 import { useProject } from '@/contexts/ProjectContext';
 import { Badge } from '@/components/ui/badge';
@@ -381,9 +380,7 @@ export const Dashboard = () => {
           </div>
         </div>
         
-        <div className="flex justify-center md:justify-start">
-          <ProjectSelector />
-        </div>
+        {/* Seletor de projeto persistente removido; usar ProjectPicker no topo */}
       </div>
 
       {/* Stats Cards (compact) */}

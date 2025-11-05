@@ -17,6 +17,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAISettings } from '@/hooks/useAISettings';
+import { useProject } from '@/contexts/ProjectContext';
 
 interface AIGeneratorFormProps {
   onSuccess?: (data: any) => void;
@@ -26,6 +27,7 @@ interface AIGeneratorFormProps {
 export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGeneratorFormProps) => {
   const { user } = useAuth();
   const { settings, updateSettings } = useAISettings();
+  const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [plans, setPlans] = useState<TestPlan[]>([]);
@@ -48,7 +50,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
       loadPlans();
       loadAvailableModels();
     }
-  }, [user]);
+  }, [user, currentProject?.id]);
 
   useEffect(() => {
     if (formData.planId && formData.type === 'execution') {
@@ -58,7 +60,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
 
   const loadPlans = async () => {
     try {
-      const data = await getTestPlans(user!.id);
+      const data = await getTestPlans(user!.id, currentProject?.id);
       setPlans(data);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
@@ -127,6 +129,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
 
   const generateWithAI = async () => {
     if (!user) return null;
+    if (!currentProject?.id) throw new Error('Selecione um projeto antes de gerar.');
 
     const taskType: AIModelTask = 
       formData.type === 'plan' ? 'test-plan-generation' : 
@@ -201,6 +204,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
           const newPlan = await createTestPlan({
             ...payload,
             user_id: user.id,
+            project_id: currentProject.id,
             generated_by_ai: true
           });
           results.push({ ...newPlan, type: 'plan' });
@@ -222,6 +226,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
             steps: (source as any)?.steps,
             plan_id: formData.planId || null,
             user_id: user.id,
+            project_id: currentProject.id,
             generated_by_ai: true
           } as any);
           results.push({ ...newCase, type: 'case' });
@@ -289,6 +294,13 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading} aria-describedby={lastError ? 'ai-error-details' : undefined}>
+          {currentProject?.name ? (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">Projeto: {currentProject.name}</Badge>
+            </div>
+          ) : (
+            <div className="text-sm text-amber-600">Selecione um projeto no topo antes de gerar.</div>
+          )}
           <div>
             <Label htmlFor="file-upload">Upload de Documento (Opcional)</Label>
             <div className="flex items-center gap-4">
@@ -549,7 +561,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
           <div className="flex justify-end">
             <Button 
               type="submit" 
-              disabled={loading || (formData.type === 'execution' && (!formData.planId || !formData.caseId))} 
+              disabled={loading || !currentProject?.id || (formData.type === 'execution' && (!formData.planId || !formData.caseId))} 
               className="min-w-[200px]"
               aria-busy={loading}
               aria-live="polite"

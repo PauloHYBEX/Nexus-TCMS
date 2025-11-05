@@ -43,6 +43,8 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
           detail: { projectId: project?.id ?? null, project, ts: Date.now() }
         });
         window.dispatchEvent(evt);
+        // Broadcast cross-window (Studio/Web)
+        try { window.postMessage({ type: 'project:changed', project }, '*'); } catch {}
       }
       // Invalida e refaz fetch das queries ativas ao trocar de projeto
       queryClient.invalidateQueries({ predicate: () => true, refetchType: 'active' });
@@ -136,6 +138,22 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       setCurrentProjectState(null);
       setLoading(false);
     }
+    // Listener para sincronização via postMessage
+    try {
+      const onMessage = (ev: MessageEvent) => {
+        const d = ev?.data as any;
+        if (!d || typeof d !== 'object') return;
+        if (d.type === 'project:changed') {
+          const p = d.project as Project | null | undefined;
+          setCurrentProjectState(p ?? null);
+          try { localStorage.setItem(CURRENT_PROJECT_KEY, p?.id ?? 'all'); } catch {}
+          // invalidar queries ativas
+          try { queryClient.invalidateQueries({ predicate: () => true, refetchType: 'active' }); } catch {}
+        }
+      };
+      window.addEventListener('message', onMessage);
+      return () => window.removeEventListener('message', onMessage);
+    } catch {}
   }, [user]);
 
   const value: ProjectContextType = {
