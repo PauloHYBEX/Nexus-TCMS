@@ -22,11 +22,15 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   priorityLabel,
   priorityBadgeClass,
   executionStatusLabel,
   executionStatusBadgeClass,
+  requirementStatusLabel,
+  requirementStatusBadgeClass,
+  defectStatusLabel,
+  defectStatusBadgeClass,
   testCaseTypeLabel,
   testCaseTypeBadgeClass,
 } from '@/lib/labels';
@@ -77,6 +81,21 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       minute: '2-digit'
     }).format(new Date(date));
   };
+
+  // Classes para status de Plano/Caso (reuso do padrão aplicado em TestPlans)
+  const planStatusClasses = (status: string) => (
+    status === 'active'
+      ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-400/15 dark:text-green-300 dark:border-transparent dark:ring-1 dark:ring-green-400/25'
+      : status === 'review'
+      ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-400/15 dark:text-yellow-300 dark:border-transparent dark:ring-1 dark:ring-yellow-400/25'
+      : status === 'approved'
+      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-400/15 dark:text-blue-300 dark:border-transparent dark:ring-1 dark:ring-blue-400/25'
+      : status === 'archived'
+      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-400/15 dark:text-red-300 dark:border-transparent dark:ring-1 dark:ring-red-400/25'
+      : status === 'draft'
+      ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
+      : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
+  );
 
   // Abre o modal de confirmação de geração
   const openGenerateDialog = () => {
@@ -568,8 +587,22 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           {/* Badges de status e prioridade */}
           <div className="flex gap-2 flex-wrap">
             {('status' in item && item.status) && (
-              <Badge className={type === 'execution' ? executionStatusBadgeClass(item.status as ExecutionStatus) : 'bg-blue-100 text-blue-800'}>
-                {type === 'execution' ? executionStatusLabel(item.status as ExecutionStatus) : translateStatus(item.status as string)}
+              <Badge className={
+                type === 'execution'
+                  ? executionStatusBadgeClass(item.status as ExecutionStatus)
+                  : type === 'requirement'
+                  ? requirementStatusBadgeClass(item.status as any)
+                  : type === 'defect'
+                  ? defectStatusBadgeClass(item.status as any)
+                  : planStatusClasses(item.status as string)
+              }>
+                {type === 'execution'
+                  ? executionStatusLabel(item.status as ExecutionStatus)
+                  : type === 'requirement'
+                  ? requirementStatusLabel(item.status as any)
+                  : type === 'defect'
+                  ? defectStatusLabel(item.status as any)
+                  : translateStatus(item.status as string)}
               </Badge>
             )}
             {('priority' in item && (item as any).priority) && (
@@ -725,7 +758,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             
             <div className="flex gap-2">
               {type === 'plan' && ('generated_by_ai' in item && item.generated_by_ai) && (
-                <Button onClick={openGenerateDialog} disabled={generating}>
+                <Button onClick={openGenerateDialog} disabled={generating || isProjectInactive} title={isProjectInactive ? 'Projeto não ativo — geração desabilitada' : undefined}>
                   {generating ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />

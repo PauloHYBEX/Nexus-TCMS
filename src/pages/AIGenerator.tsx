@@ -3,6 +3,7 @@ import { Sparkles, Files, FileText, TestTube, PlayCircle, Eye, Info, User, Layer
 import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 import { AIBatchGeneratorForm } from '@/components/forms/AIBatchGeneratorForm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useProject } from '@/contexts/ProjectContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -61,13 +62,15 @@ export const AIGenerator = () => {
   // Layout simplificado: geração individual ou em lote controlado pelos ícones do cabeçalho
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, loading } = usePermissions();
+  const { currentProject } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
-  const canGeneratePlan = hasPermission('can_use_ai') && hasPermission('can_manage_plans');
-  const canGenerateCase = hasPermission('can_use_ai') && hasPermission('can_manage_cases');
-  const canGenerateExecution = hasPermission('can_use_ai') && hasPermission('can_manage_executions');
-  const planDisabled = loading || !canGeneratePlan;
-  const caseDisabled = loading || !canGenerateCase;
-  const executionDisabled = loading || !canGenerateExecution;
+  const canGeneratePlan = hasPermission('can_use_ai') && hasPermission('can_manage_plans') && !isProjectInactive;
+  const canGenerateCase = hasPermission('can_use_ai') && hasPermission('can_manage_cases') && !isProjectInactive;
+  const canGenerateExecution = hasPermission('can_use_ai') && hasPermission('can_manage_executions') && !isProjectInactive;
+  const planDisabled = loading || isProjectInactive || !canGeneratePlan;
+  const caseDisabled = loading || isProjectInactive || !canGenerateCase;
+  const executionDisabled = loading || isProjectInactive || !canGenerateExecution;
 
   // Sincroniza o estado com o query param ?type=
   useEffect(() => {
@@ -166,7 +169,7 @@ export const AIGenerator = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={batchMode === 'individual' ? 'secondary' : 'ghost'}
+                  variant={batchMode === 'individual' ? 'brand' : 'ghost'}
                   size="icon"
                   aria-label="Modo individual"
                   aria-pressed={batchMode === 'individual'}
@@ -182,7 +185,7 @@ export const AIGenerator = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={batchMode === 'batch' ? 'secondary' : 'ghost'}
+                  variant={batchMode === 'batch' ? 'brand' : 'ghost'}
                   size="icon"
                   aria-label="Modo em lote"
                   aria-pressed={batchMode === 'batch'}
@@ -267,7 +270,7 @@ export const AIGenerator = () => {
 
               {/* Casos */}
               <div
-                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                className={`relative grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
                 role="button"
                 tabIndex={caseDisabled ? -1 : 0}
                 aria-disabled={caseDisabled}
@@ -301,11 +304,13 @@ export const AIGenerator = () => {
                     {batchMode === 'batch' ? 'Gerar Vários Casos' : 'Gerar Casos de Teste'}
                   </div>
                 </div>
+                {/* Placeholder para manter a centralização igual à primeira linha */}
+                <div className="h-9 w-9 opacity-0 pointer-events-none" aria-hidden />
               </div>
 
               {/* Execução */}
               <div
-                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                className={`relative grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
                 role="button"
                 tabIndex={executionDisabled ? -1 : 0}
                 aria-disabled={executionDisabled}
@@ -335,6 +340,8 @@ export const AIGenerator = () => {
                     Gerar Execução de Teste
                   </div>
                 </div>
+                {/* Placeholder para manter a centralização igual à primeira linha */}
+                <div className="h-9 w-9 opacity-0 pointer-events-none" aria-hidden />
               </div>
             </div>
           </Card>

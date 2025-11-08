@@ -32,7 +32,7 @@ export const ProjectAdmin: React.FC = () => {
     if (tab === 'archived') {
       refreshArchivedProjects().catch(() => {});
     }
-  }, [tab]);
+  }, [tab, refreshArchivedProjects]);
 
   const orderedActive = useMemo(() => {
     return [...projects].sort((a, b) => a.name.localeCompare(b.name));
@@ -44,12 +44,18 @@ export const ProjectAdmin: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 border-green-200';
-      case 'paused': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'completed': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'archived': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'canceled': return 'bg-red-100 text-red-800 border-red-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'active':
+        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-400/15 dark:text-green-300 dark:ring-1 dark:ring-green-400/25 dark:border-transparent';
+      case 'paused':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-400/15 dark:text-yellow-300 dark:ring-1 dark:ring-yellow-400/25 dark:border-transparent';
+      case 'completed':
+        return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-400/15 dark:text-blue-300 dark:ring-1 dark:ring-blue-400/25 dark:border-transparent';
+      case 'archived':
+        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:ring-1 dark:ring-slate-400/25 dark:border-transparent';
+      case 'canceled':
+        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-400/15 dark:text-red-300 dark:ring-1 dark:ring-red-400/25 dark:border-transparent';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:ring-1 dark:ring-slate-400/25 dark:border-transparent';
     }
   };
 
@@ -101,7 +107,7 @@ export const ProjectAdmin: React.FC = () => {
         </div>
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="accent-gradient-bg text-brand-foreground border-0 hover:opacity-95">
               <Plus className="h-4 w-4 mr-2" /> Novo Projeto
             </Button>
           </DialogTrigger>
@@ -134,7 +140,7 @@ export const ProjectAdmin: React.FC = () => {
         </Dialog>
       </div>
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="w-full">
+      <Tabs value={tab} onValueChange={(v: 'active' | 'archived') => setTab(v)} className="w-full">
         <TabsList className="mb-4">
           <TabsTrigger value="active">Ativos</TabsTrigger>
           <TabsTrigger value="archived">Arquivados/Cancelados</TabsTrigger>

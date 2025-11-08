@@ -83,11 +83,11 @@ const roleLabels = {
 };
 
 const roleColors = {
-  master: 'bg-purple-100 text-purple-800 border-purple-300',
-  admin: 'bg-red-100 text-red-800 border-red-300',
-  manager: 'bg-blue-100 text-blue-800 border-blue-300',
-  tester: 'bg-green-100 text-green-800 border-green-300',
-  viewer: 'bg-gray-100 text-gray-800 border-gray-300'
+  master: 'bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-400/15 dark:text-purple-300 dark:ring-1 dark:ring-purple-400/25 dark:border-transparent',
+  admin: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-400/15 dark:text-red-300 dark:ring-1 dark:ring-red-400/25 dark:border-transparent',
+  manager: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-400/15 dark:text-blue-300 dark:ring-1 dark:ring-blue-400/25 dark:border-transparent',
+  tester: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-400/15 dark:text-green-300 dark:ring-1 dark:ring-green-400/25 dark:border-transparent',
+  viewer: 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-slate-400/15 dark:text-slate-300 dark:ring-1 dark:ring-slate-400/25 dark:border-transparent'
 };
 
 type FunctionRole = 'desenvolvimento' | 'suporte' | 'gerencia' | 'supervisao' | 'visualizador';
@@ -1087,22 +1087,22 @@ const UserTable = ({
                   <TableCell>
                     <div className="flex flex-wrap gap-2">
                       {user.permissions?.can_manage_users && (
-                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                        <div className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded dark:bg-blue-400/15 dark:text-blue-300 dark:ring-1 dark:ring-blue-400/25">
                           Gerenciar Usuários
                         </div>
                       )}
                       {user.permissions?.can_manage_plans && (
-                        <div className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded">
+                        <div className="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded dark:bg-emerald-400/15 dark:text-emerald-300 dark:ring-1 dark:ring-emerald-400/25">
                           Planos
                         </div>
                       )}
                       {user.permissions?.can_use_ai && (
-                        <div className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                        <div className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded dark:bg-purple-400/15 dark:text-purple-300 dark:ring-1 dark:ring-purple-400/25">
                           IA
                         </div>
                       )}
                       {user.permissions?.can_view_reports && (
-                        <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">
+                        <div className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded dark:bg-amber-400/15 dark:text-amber-300 dark:ring-1 dark:ring-amber-400/25">
                           Relatórios
                         </div>
                       )}
