@@ -91,7 +91,7 @@ export const AIBatchModal = ({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-6xl max-h-[90vh] text-center">
+        <DialogContent className="max-w-6xl max-h-[90vh] text-center overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
@@ -102,7 +102,7 @@ export const AIBatchModal = ({
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="h-[70vh]">
+          <ScrollArea className="h-[70vh] overflow-x-hidden">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-1">
               {plans.map((plan) => (
                 <Card key={plan.id} className="relative">

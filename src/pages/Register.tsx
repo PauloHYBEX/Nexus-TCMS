@@ -49,7 +49,7 @@ export default function Register() {
             <div className="flex items-center gap-3">
               <KrigzisLogo size={32} className="h-8 w-8" />
               <h1 className="text-3xl font-bold bg-gradient-to-r from-brand to-brand/80 bg-clip-text text-transparent">
-                Krigzis TCMS
+                TestPilot AI
               </h1>
             </div>
             <div className="text-center space-y-2">

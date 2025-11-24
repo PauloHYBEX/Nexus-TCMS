@@ -1,10 +1,14 @@
-import { useState } from 'react';
+  import { useState } from 'react';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
+import { useProject } from '@/contexts/ProjectContext';
+import { applyProjectTheme, resetProjectTheme } from '@/lib/theme/projectTheme';
 import { useAISettings } from '@/hooks/useAISettings';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
@@ -55,6 +59,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
   const { settings: aiSettings, updateSettings: updateAISettings } = useAISettings();
   const { role, permissions, hasPermission, isAdmin } = usePermissions();
   const navigate = useNavigate();
+  const { currentProject } = useProject();
   
   // State for open/closed sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
@@ -219,7 +224,7 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
               <div className="space-y-2">
                 <Label htmlFor="quick-action">Funcionalidade Botão Principal</Label>
                 <Select 
-                                value={dashboardSettings.quickActionType} 
+                  value={dashboardSettings.quickActionType} 
                   onValueChange={handleQuickActionChange}
                 >
                   <SelectTrigger id="quick-action">
@@ -233,7 +238,27 @@ export const SettingsModal = ({ isOpen, onClose }: SettingsModalProps) => {
                 </Select>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Define qual tipo de item será criado pelo botão principal do Dashboard.
-                                Atualmente: <strong>{getActionLabel(dashboardSettings.quickActionType)}</strong>
+                  Atualmente: <strong>{getActionLabel(dashboardSettings.quickActionType)}</strong>
+                </p>
+
+                              <div className="mt-4 flex items-center justify-between">
+                                <Label htmlFor="apply-project-theme" className="text-sm">Aplicar cores do projeto ao tema (gradiente)</Label>
+                                <Switch
+                                  id="apply-project-theme"
+                                  checked={dashboardSettings.applyProjectThemeEnabled}
+                                  onCheckedChange={(checked) => {
+                                    updateDashboardSettings({ applyProjectThemeEnabled: checked });
+                                    if (checked) {
+                                      const hex = currentProject?.color;
+                                      if (hex) applyProjectTheme(hex);
+                                    } else {
+                                      resetProjectTheme();
+                                    }
+                                  }}
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                Quando ativo, a UI usa um gradiente sutil baseado na cor do projeto.
                               </p>
                             </div>
                           )}

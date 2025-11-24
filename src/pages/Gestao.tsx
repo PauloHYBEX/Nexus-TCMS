@@ -75,8 +75,8 @@ export const Gestao = () => {
         </div>
         {((tab === 'requirements' || tab === 'traceability') && hasPermission('can_manage_cases')) || (tab === 'defects' && hasPermission('can_manage_executions')) ? (
           <StandardButton
+            variant="brand"
             onClick={handleCreate}
-            className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
             disabled={!currentProject || isProjectInactive}
             title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação desabilitada' : undefined)}
           >

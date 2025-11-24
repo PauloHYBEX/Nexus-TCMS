@@ -106,10 +106,10 @@ export const Header = () => {
             <div className="flex items-center gap-2">
               <KrigzisLogo size={24} className="h-6 w-6" />
               <h1 className="text-2xl font-bold text-foreground hidden md:block">
-                Krigzis TCMS
+                TestPilot AI
               </h1>
             </div>
-            <p className="text-sm text-muted-foreground hidden lg:block">
+            <p className="hidden lg:block text-sm font-medium accent-gradient-text opacity-90">
               Geração inteligente de testes
             </p>
             <div className="hidden md:block ml-4">

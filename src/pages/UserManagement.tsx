@@ -49,7 +49,7 @@ import {
 
 // Single-tenant flag: when true, bypass remote permissions/profiles and operate locally as master
 // Default to true if env is missing (safer default for uso particular)
-const SINGLE_TENANT = String((import.meta as any).env?.VITE_SINGLE_TENANT ?? 'true') === 'true';
+const SINGLE_TENANT = String(import.meta.env?.VITE_SINGLE_TENANT ?? 'true') === 'true';
 
 interface UserData extends User {
   profile?: {
@@ -98,6 +98,44 @@ type RoleRequest = {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
 };
+
+// Tipos auxiliares para evitar 'any'
+type ProfileRow = {
+  id: string;
+  display_name: string | null;
+  role: string | null;
+  email?: string | null;
+  organization_id?: string | null;
+};
+
+type PermRow = {
+  user_id: string;
+  can_manage_users: boolean;
+  can_manage_projects: boolean;
+  can_delete_projects: boolean;
+  can_manage_plans: boolean;
+  can_manage_cases: boolean;
+  can_manage_executions: boolean;
+  can_view_reports: boolean;
+  can_use_ai: boolean;
+};
+
+// Normaliza uma linha de permissões 'mínima' (vinda do banco) para o shape completo esperado na UI
+const normalizePerms = (row?: PermRow): Required<NonNullable<UserData['permissions']>> => ({
+  can_manage_users: !!row?.can_manage_users,
+  can_manage_projects: !!row?.can_manage_projects,
+  can_delete_projects: !!row?.can_delete_projects,
+  can_manage_plans: row?.can_manage_plans ?? true,
+  can_manage_cases: row?.can_manage_cases ?? true,
+  can_manage_executions: row?.can_manage_executions ?? true,
+  can_view_reports: row?.can_view_reports ?? true,
+  can_use_ai: row?.can_use_ai ?? true,
+  can_access_model_control: false,
+  can_configure_ai_models: false,
+  can_test_ai_connections: false,
+  can_manage_ai_templates: false,
+  can_select_ai_models: true,
+});
 
 export const UserManagement = () => {
   const { role, isMaster, updateUserToMaster, getDefaultPermissions } = usePermissions();
@@ -165,9 +203,10 @@ export const UserManagement = () => {
       }
       await fetchUsers();
       toast({ title: 'Perfis sincronizados', description: 'Perfis e permissões foram atualizados.' });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Não foi possível sincronizar perfis.';
       console.error(e);
-      toast({ title: 'Erro', description: e?.message || 'Não foi possível sincronizar perfis.', variant: 'destructive' });
+      toast({ title: 'Erro', description: message, variant: 'destructive' });
     } finally {
       setSyncingProfiles(false);
     }
@@ -193,48 +232,39 @@ export const UserManagement = () => {
   });
 
   // Helper: constrói a lista de usuários a partir de profiles, com upsert e permissões em lote
-  const buildUsersFromProfiles = useCallback(async (profiles: Array<{ id: string; display_name: string | null; role: string | null; email?: string | null; organization_id?: string | null }>) => {
+  const buildUsersFromProfiles = useCallback(async (profiles: ProfileRow[]) => {
     try {
       const ids = profiles.map(p => p.id);
       if (ids.length > 0) {
         try {
           const upRows = ids.map(id => ({ user_id: id }));
-          await supabase.from('user_permissions' as any).upsert(upRows, { onConflict: 'user_id' } as any);
+          await supabase.from('user_permissions').upsert(upRows, { onConflict: 'user_id' });
         } catch (e) {
           console.warn('user_permissions batch upsert (profiles) warning:', e);
         }
       }
 
       const { data: permsList } = await supabase
-        .from('user_permissions' as any)
+        .from('user_permissions')
         .select('user_id, can_manage_users, can_manage_projects, can_delete_projects, can_manage_plans, can_manage_cases, can_manage_executions, can_view_reports, can_use_ai')
         .in('user_id', ids);
-      const permMap = new Map<string, any>((permsList || []).map((p: any) => [p.user_id, p]));
+      const permMap = new Map<string, PermRow>((permsList as PermRow[] | null || []).map((p) => [p.user_id, p]));
 
       const usersWithDetails: UserData[] = profiles.map((p) => {
-        const perms = permMap.get(p.id) || {
-          can_manage_users: false,
-          can_manage_projects: false,
-          can_delete_projects: false,
-          can_manage_plans: true,
-          can_manage_cases: true,
-          can_manage_executions: true,
-          can_view_reports: true,
-          can_use_ai: true,
-        };
+        const perms = normalizePerms(permMap.get(p.id));
         return {
           id: p.id,
-          email: (p as any).email || `user_${p.id.slice(0, 8)}@sistema.local`,
-          app_metadata: {} as any,
-          user_metadata: {} as any,
+          email: p.email || `user_${p.id.slice(0, 8)}@sistema.local`,
+          app_metadata: {} as Record<string, unknown>,
+          user_metadata: {} as Record<string, unknown>,
           aud: 'authenticated',
-          created_at: new Date().toISOString() as any,
+          created_at: new Date().toISOString() as string,
           profile: {
             display_name: p.display_name,
             role: (p.role as UserRole) || 'viewer',
-            organization_id: (p as any).organization_id || null
+            organization_id: p.organization_id || null
           },
-          permissions: perms as any
+          permissions: perms
         } as UserData;
       });
 
@@ -258,12 +288,16 @@ export const UserManagement = () => {
           const localUser: UserData = {
             id: current.id,
             email: current.email || `user_${current.id.slice(0, 8)}@sistema.local`,
-            app_metadata: current.app_metadata as any,
-            user_metadata: current.user_metadata as any,
+            app_metadata: (current.app_metadata ?? {}) as Record<string, unknown>,
+            user_metadata: (current.user_metadata ?? {}) as Record<string, unknown>,
             aud: 'authenticated',
-            created_at: current.created_at as any,
+            created_at: String(current.created_at),
             profile: {
-              display_name: (current.user_metadata as any)?.full_name || 'Master',
+              display_name: (
+                typeof (current.user_metadata as Record<string, unknown> | null | undefined)?.full_name === 'string'
+                  ? ((current.user_metadata as Record<string, unknown>).full_name as string)
+                  : 'Master'
+              ),
               role: 'master',
               organization_id: null
             },
@@ -277,14 +311,13 @@ export const UserManagement = () => {
       }
 
       // Modo multi-tenant: listar DIRETAMENTE de auth.users via RPC, com left join em profiles
-      const { data: allUsers, error: listErr } = await supabase
-        .rpc('list_all_users');
+      const { data: allUsers, error: listErr } = await supabase.rpc('list_all_users');
 
       if (listErr) {
         console.error('Error listing all users via RPC:', listErr);
         // Fallback: buscar via profiles
         const { data: profiles, error: profilesError } = await supabase
-          .from('profiles' as any)
+          .from('profiles')
           .select('id, display_name, role, email')
           .order('display_name');
         if (profilesError) {
@@ -292,7 +325,7 @@ export const UserManagement = () => {
           toast({ title: 'Erro', description: 'Falha ao listar usuários.', variant: 'destructive' });
           return;
         }
-        await buildUsersFromProfiles(profiles as any[]);
+        await buildUsersFromProfiles((profiles ?? []) as ProfileRow[]);
         return;
       }
 
@@ -302,14 +335,14 @@ export const UserManagement = () => {
       // Fallback se não houver linhas (ex.: sem permissões ou função ausente)
       if (rows.length === 0) {
         const { data: profiles, error: profilesError } = await supabase
-          .from('profiles' as any)
+          .from('profiles')
           .select('id, display_name, role, email')
           .order('display_name');
         if (profilesError) {
           setUsers([]);
           return;
         }
-        await buildUsersFromProfiles(profiles as any[]);
+        await buildUsersFromProfiles((profiles ?? []) as ProfileRow[]);
         return;
       }
 
@@ -317,7 +350,7 @@ export const UserManagement = () => {
       if (ids.length > 0) {
         try {
           const upRows = ids.map((id) => ({ user_id: id }));
-          await supabase.from('user_permissions' as any).upsert(upRows, { onConflict: 'user_id' } as any);
+          await supabase.from('user_permissions').upsert(upRows, { onConflict: 'user_id' });
         } catch (e) {
           console.warn('user_permissions batch upsert warning:', e);
         }
@@ -325,41 +358,32 @@ export const UserManagement = () => {
 
       // Carrega permissões em lote para evitar N+1
       const { data: permsList } = await supabase
-        .from('user_permissions' as any)
+        .from('user_permissions')
         .select('user_id, can_manage_users, can_manage_projects, can_delete_projects, can_manage_plans, can_manage_cases, can_manage_executions, can_view_reports, can_use_ai')
         .in('user_id', ids);
 
-      const permMap = new Map<string, any>((permsList || []).map((p: any) => [p.user_id, p]));
+      const permMap = new Map<string, PermRow>(((permsList as PermRow[] | null) || []).map((p) => [p.user_id, p]));
 
       const usersWithDetails: UserData[] = rows.map((r) => {
-        const perms = permMap.get(r.id) || {
-          can_manage_users: false,
-          can_manage_projects: false,
-          can_delete_projects: false,
-          can_manage_plans: true,
-          can_manage_cases: true,
-          can_manage_executions: true,
-          can_view_reports: true,
-          can_use_ai: true,
-        };
+        const perms = normalizePerms(permMap.get(r.id));
         return {
           id: r.id,
           email: r.email || `user_${r.id.slice(0, 8)}@sistema.local`,
-          app_metadata: {} as any,
-          user_metadata: {} as any,
+          app_metadata: {} as Record<string, unknown>,
+          user_metadata: {} as Record<string, unknown>,
           aud: 'authenticated',
-          created_at: r.created_at as any,
+          created_at: String(r.created_at),
           profile: {
             display_name: r.display_name,
             role: (r.role as UserRole) || 'viewer',
             organization_id: null
           },
-          permissions: perms as any
+          permissions: perms
         } as UserData;
       });
 
       setUsers(usersWithDetails);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error fetching users:', error);
       setHasError(true);
       toast({
@@ -371,7 +395,7 @@ export const UserManagement = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, getDefaultPermissions]);
+  }, [toast, getDefaultPermissions, buildUsersFromProfiles]);
 
   // Load users
   useEffect(() => {
@@ -383,12 +407,12 @@ export const UserManagement = () => {
     const loadRequests = async () => {
       if (SINGLE_TENANT) { setRoleRequests([]); return; }
       const { data, error } = await supabase
-        .from('role_requests' as any)
-        .select('id, user_id, requested_roles, status, created_at')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: true });
+          .from('role_requests')
+          .select('id, user_id, requested_roles, status, created_at')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: true });
       if (!error && data) {
-        setRoleRequests(data as any);
+        setRoleRequests((data as unknown as RoleRequest[]) || []);
         const init: Record<string, Set<FunctionRole>> = {};
         for (const r of data as RoleRequest[]) init[r.user_id] = new Set(r.requested_roles);
         setSelection(init);
@@ -456,27 +480,27 @@ export const UserManagement = () => {
       const orgId = users.find(u => u.id === user?.id)?.profile?.organization_id || null;
       const { data, error } = await supabase.functions.invoke('invite-user', {
         body: { email: inviteEmail, role: inviteRole, organization_id: orgId },
-        headers: { 'X-Debug': (import.meta as any).env?.DEV ? '1' : '0' }
+        headers: { 'X-Debug': import.meta.env.DEV ? '1' : '0' }
       });
       if (error) {
         console.error('invite-user error:', error);
-        toast({ title: 'Falha ao enviar convite', description: (error as any)?.message || 'Erro desconhecido.', variant: 'destructive' });
+        toast({ title: 'Falha ao enviar convite', description: (error as { message?: string })?.message || 'Erro desconhecido.', variant: 'destructive' });
         return;
       }
-      if ((data as any)?.email_sent_via === 'password_reset') {
+      if ((data as { email_sent_via?: string } | null)?.email_sent_via === 'password_reset') {
         // Email enviado para usuário já existente
         toast({ title: 'E-mail enviado', description: 'Usuário já existia. Enviamos um e-mail de recuperação de senha.' });
-      } else if ((data as any)?.success) {
+      } else if ((data as { success?: boolean } | null)?.success) {
         // Convite padrão enviado por e-mail
         toast({ title: 'Convite enviado', description: 'Usuário convidado com sucesso (papel inicial viewer).' });
-      } else if ((data as any)?.recovery_link) {
+      } else if ((data as { recovery_link?: string } | null)?.recovery_link) {
         // Não exibir links na UI por segurança; orientar ajuste de configuração
         console.warn('invite-user fallback link (não exibido). Ajuste Auth → URL Configuration (site_url e Redirect URLs).');
         toast({ title: 'Ação necessária', description: 'Atualize Auth → URL Configuration (site_url e Redirect URLs) para permitir envio de e-mails. Não exibimos links na tela.', variant: 'destructive' });
-      } else if ((data as any)?.success === false) {
+      } else if ((data as { success?: boolean; error?: string; debug_info?: unknown } | null)?.success === false) {
         // Modo debug da Edge Function retornou sucesso=false com detalhes
-        console.error('invite-user debug_info:', (data as any)?.debug_info);
-        toast({ title: 'Falha ao enviar convite', description: (data as any)?.error || 'Erro desconhecido.', variant: 'destructive' });
+        console.error('invite-user debug_info:', (data as { debug_info?: unknown } | null)?.debug_info);
+        toast({ title: 'Falha ao enviar convite', description: (data as { error?: string } | null)?.error || 'Erro desconhecido.', variant: 'destructive' });
       } else {
         toast({ title: 'Aviso', description: 'Resposta inesperada do servidor. Verifique os logs.', variant: 'destructive' });
       }
@@ -484,9 +508,10 @@ export const UserManagement = () => {
       setInviteEmail('');
       setInviteRole('viewer');
       await fetchUsers();
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Não foi possível enviar o convite.';
       console.error(e);
-      toast({ title: 'Erro', description: e?.message || 'Não foi possível enviar o convite.', variant: 'destructive' });
+      toast({ title: 'Erro', description: message, variant: 'destructive' });
     } finally {
       setInviteLoading(false);
     }
@@ -496,8 +521,8 @@ export const UserManagement = () => {
   const canManageUser = (targetRole: string) => {
     // Em single-tenant, Master sempre pode
     if (SINGLE_TENANT) return true;
-    // Política: apenas MASTER pode gerenciar (admin não altera)
-    return role === 'master';
+    // Política revisada: MASTER e ADMIN podem alterar papéis
+    return role === 'master' || role === 'admin';
   };
 
   // === Utilitários da aba Solicitações (definidos antes do JSX) ===
@@ -518,9 +543,9 @@ export const UserManagement = () => {
       const roles = Array.from(selection[req.user_id] || new Set<FunctionRole>());
       if (roles.length === 0) return;
       const rows = roles.map(role => ({ user_id: req.user_id, role }));
-      const { error: upErr } = await supabase.from('profile_function_roles' as any).upsert(rows, { onConflict: 'user_id,role' } as any);
+      const { error: upErr } = await supabase.from('profile_function_roles').upsert(rows, { onConflict: 'user_id,role' });
       if (upErr) throw upErr;
-      const { error: stErr } = await supabase.from('role_requests' as any).update({ status: 'approved' }).eq('id', req.id);
+      const { error: stErr } = await supabase.from('role_requests').update({ status: 'approved' }).eq('id', req.id);
       if (stErr) throw stErr;
       setRoleRequests(prev => prev.filter(r => r.id !== req.id));
     } finally {
@@ -532,7 +557,7 @@ export const UserManagement = () => {
     if (SINGLE_TENANT) return;
     try {
       setAssigning(req.id);
-      const { error } = await supabase.from('role_requests' as any).update({ status: 'rejected' }).eq('id', req.id);
+      const { error } = await supabase.from('role_requests').update({ status: 'rejected' }).eq('id', req.id);
       if (error) throw error;
       setRoleRequests(prev => prev.filter(r => r.id !== req.id));
     } finally {
@@ -559,14 +584,14 @@ export const UserManagement = () => {
       } : u)) as UserData[]);
       return;
     }
-    // Multi-tenant: apenas master pode alterar
-    if (role !== 'master') {
-      toast({ title: 'Acesso negado', description: 'Apenas usuários Master podem alterar papéis.' , variant: 'destructive'});
+    // Multi-tenant: MASTER e ADMIN podem alterar
+    if (!(role === 'master' || role === 'admin')) {
+      toast({ title: 'Acesso negado', description: 'Apenas usuários Master ou Admin podem alterar papéis.' , variant: 'destructive'});
       return;
     }
     try {
       const { error } = await supabase
-        .from('profiles' as any)
+        .from('profiles')
         .update({ role: newRole })
         .eq('id', id);
       if (error) {
@@ -574,15 +599,25 @@ export const UserManagement = () => {
         toast({ title: 'Falha ao alterar papel', description: error.message || 'Erro desconhecido.', variant: 'destructive' });
         return;
       }
+      // Sincroniza permissões padrão do novo papel
+      try {
+        const defaults = getDefaultPermissions(newRole as UserRole);
+        await supabase
+          .from('user_permissions')
+          .upsert({ user_id: id, ...defaults }, { onConflict: 'user_id' });
+      } catch (e) {
+        console.warn('Não foi possível sincronizar permissões padrão para o papel', newRole, e);
+      }
       // Atualiza estado local
       setUsers(prev => prev.map(u => (u.id === id ? {
         ...u,
-        profile: { ...(u.profile as any), role: newRole as UserRole }
+        profile: { ...(u.profile ?? { display_name: '', organization_id: null, role: 'viewer' as UserRole }), role: newRole as UserRole }
       } : u)));
       toast({ title: 'Papel atualizado', description: 'O papel do usuário foi atualizado com sucesso.' });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Não foi possível alterar o papel.';
       console.error(e);
-      toast({ title: 'Erro', description: e?.message || 'Não foi possível alterar o papel.', variant: 'destructive' });
+      toast({ title: 'Erro', description: message, variant: 'destructive' });
     }
   };
 
@@ -605,9 +640,10 @@ export const UserManagement = () => {
     }
     try {
       // Atualiza somente a coluna alterada na tabela user_permissions
+      const body: Record<string, unknown> & { user_id: string } = { user_id: id, [permission]: value };
       const { error: upErr } = await supabase
-        .from('user_permissions' as any)
-        .upsert({ user_id: id, [permission]: value } as any, { onConflict: 'user_id' } as any);
+        .from('user_permissions')
+        .upsert(body, { onConflict: 'user_id' });
       if (upErr) {
         console.error('user_permissions upsert error:', upErr);
         toast({ title: 'Falha ao alterar permissão', description: upErr.message || 'Erro desconhecido.', variant: 'destructive' });
@@ -622,9 +658,10 @@ export const UserManagement = () => {
         setEditForm(prev => ({ ...prev, [permission]: value }));
       }
       toast({ title: 'Permissão atualizada', description: 'As permissões do usuário foram atualizadas.' });
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Não foi possível alterar a permissão.';
       console.error(e);
-      toast({ title: 'Erro', description: e?.message || 'Não foi possível alterar a permissão.', variant: 'destructive' });
+      toast({ title: 'Erro', description: message, variant: 'destructive' });
     }
   };
 
@@ -654,14 +691,15 @@ export const UserManagement = () => {
       });
       if (error) {
         console.error('delete-user error:', error);
-        toast({ title: 'Falha ao remover usuário', description: (error as any)?.message || 'Erro desconhecido.', variant: 'destructive' });
+        toast({ title: 'Falha ao remover usuário', description: (error as { message?: string })?.message || 'Erro desconhecido.', variant: 'destructive' });
         return;
       }
       toast({ title: 'Usuário removido', description: 'O usuário foi removido com sucesso.' });
       await fetchUsers();
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'Não foi possível remover o usuário.';
       console.error(e);
-      toast({ title: 'Erro', description: e?.message || 'Não foi possível remover o usuário.', variant: 'destructive' });
+      toast({ title: 'Erro', description: message, variant: 'destructive' });
     } finally {
       setDeleteLoading(false);
       setIsDeleteModalOpen(false);
@@ -1176,8 +1214,8 @@ const UserTable = ({
                                   <Label>Gerenciar Projetos</Label>
                                 </div>
                                 <Switch
-                                  checked={Boolean((user as any).permissions?.can_manage_projects)}
-                                  onCheckedChange={(checked) => handlePermissionChange(user.id, 'can_manage_projects' as any, checked)}
+                                  checked={Boolean(user.permissions?.can_manage_projects)}
+                                  onCheckedChange={(checked) => handlePermissionChange(user.id, 'can_manage_projects', checked)}
                                   disabled={!canManageUser(user.profile?.role || 'tester')}
                                 />
                               </div>
@@ -1188,8 +1226,8 @@ const UserTable = ({
                                   <Label>Excluir Projetos</Label>
                                 </div>
                                 <Switch
-                                  checked={Boolean((user as any).permissions?.can_delete_projects)}
-                                  onCheckedChange={(checked) => handlePermissionChange(user.id, 'can_delete_projects' as any, checked)}
+                                  checked={Boolean(user.permissions?.can_delete_projects)}
+                                  onCheckedChange={(checked) => handlePermissionChange(user.id, 'can_delete_projects', checked)}
                                   disabled={!canManageUser(user.profile?.role || 'tester')}
                                 />
                               </div>

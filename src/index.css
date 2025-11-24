@@ -236,6 +236,38 @@
   }
 }
 
+@layer utilities {
+  /* Gradientes sutis baseados no brand atual */
+  .accent-gradient-bg {
+    background-image: linear-gradient(90deg, hsl(var(--brand)), hsl(var(--brand-hover)));
+  }
+  .accent-gradient-bg-soft {
+    background-image: linear-gradient(90deg, hsl(var(--brand) / 0.35), hsl(var(--brand-hover) / 0.55));
+  }
+  .accent-gradient-text {
+    background-image: linear-gradient(90deg, hsl(var(--brand)), hsl(var(--brand-hover)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Esconder scrollbar sem desativar o scroll */
+  .no-scrollbar {
+    scrollbar-width: none;            /* Firefox */
+    -ms-overflow-style: none;         /* IE/Edge */
+  }
+  .no-scrollbar::-webkit-scrollbar {  /* Chrome/Safari/Opera */
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+/* Sidebar: item ativo com gradiente sutil de fundo */
+[data-sidebar="menu-button"][data-active="true"] {
+  background-image: linear-gradient(90deg, hsl(var(--brand) / 0.35), hsl(var(--brand-hover) / 0.55));
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;

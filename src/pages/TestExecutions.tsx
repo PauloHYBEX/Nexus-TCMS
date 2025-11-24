@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { usePaginationUrlSync } from '@/hooks/usePaginationUrlSync';
+import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -29,8 +31,16 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export const TestExecutions = () => {
+  const { initFromSearchParams, writeFromState } = usePaginationUrlSync();
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Refs para altura virtual
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const listHeaderRef = useRef<HTMLDivElement | null>(null);
+  const listCardRef = useRef<HTMLDivElement | null>(null);
+  const paginationRef = useRef<HTMLDivElement | null>(null);
+  const [rowSize, setRowSize] = useState<number>(72);
   const [executions, setExecutions] = useState<TestExecution[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -46,9 +56,15 @@ export const TestExecutions = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'executed_at' | 'sequence' | 'status'>('executed_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  // Pagination
+  // Paginação via hook
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(9);
+  // Estados para hook de paginação
+  const [q, setQ] = useState('');
+  const [dateStart, setDateStart] = useState<string>('');
+  const [dateEnd, setDateEnd] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'plan' | 'case' | 'execution'>('all');
+  const [applied, setApplied] = useState<{ q: string; dateStart?: string; dateEnd?: string; type: 'all' | 'plan' | 'case' | 'execution' }>({ q: '', type: 'all' });
   // Projeto atual (controle global)
   const { currentProject, projects } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
@@ -126,16 +142,11 @@ export const TestExecutions = () => {
     }
   }, [searchParams, executions]);
 
-  // Read pagination from URL
+  // Inicializar filtros via hook
   useEffect(() => {
-    const sp = searchParams.get('page');
-    const ps = searchParams.get('pageSize');
-    const p = sp ? Math.max(1, parseInt(sp, 10) || 1) : 1;
-    const s = ps ? Math.max(1, parseInt(ps, 10) || 9) : 9;
-    if (p !== page) setPage(p);
-    if (s !== pageSize) setPageSize(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    initFromSearchParams({ setQ, setDateStart, setDateEnd, setTypeFilter, setApplied, setPage });
+    setSearchTerm(q);
+  }, [initFromSearchParams, q]);
 
   const filteredExecutions = useMemo(() => {
     const raw = searchTerm.trim();
@@ -201,14 +212,23 @@ export const TestExecutions = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  // Sync page & pageSize to URL
+  // Sincronizar applied com URL
   useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    params.set('page', String(currentPage));
-    params.set('pageSize', String(pageSize));
-    setSearchParams(params);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize]);
+    writeFromState(applied, page);
+  }, [applied, page, writeFromState]);
+
+  // Hook de altura virtual
+  const { listHeight } = useVirtualTableHeight({
+    containerRef,
+    listHeaderRef,
+    listCardRef,
+    paginationRef,
+    rowSize,
+    pageSize,
+    totalItems,
+    currentPage,
+    minHeight: 240,
+  });
 
   // Scroll to top when page or pageSize changes
   useEffect(() => {
@@ -441,7 +461,7 @@ export const TestExecutions = () => {
           <DialogTrigger asChild>
             <StandardButton 
               onClick={() => {}}
-              className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
+              variant="brand"
               disabled={!currentProject || currentProject.status !== 'active'}
               title={!currentProject ? 'Selecione um projeto ativo para criar execuções' : (currentProject.status !== 'active' ? 'Projeto não ativo — criação desabilitada' : undefined)}
             >

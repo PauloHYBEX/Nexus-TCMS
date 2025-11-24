@@ -1,5 +1,4 @@
 import React from 'react';
-import appIcon from '../../../assets/icon.svg';
 
 type KrigzisLogoProps = {
   size?: number;
@@ -17,11 +16,11 @@ export const KrigzisLogo: React.FC<KrigzisLogoProps> = ({
   size = 28,
   className,
   // strokeWidth é ignorado com <img>, mantido apenas para compatibilidade
-  title = 'Krigzis TCMS'
+  title = 'TestPilot AI'
 }) => {
   return (
     <img
-      src={appIcon}
+      src={"/app-icon.png"}
       width={size}
       height={size}
       alt={title}

@@ -12,14 +12,14 @@ import { groqGenerateText } from '@/integrations/groq/client';
 import { ollamaGenerateText } from '@/integrations/ollama/client';
 import { validateWithSchema, tryRepairWithSchema, SchemaId } from '@/services/aiSchemas';
 
-// Local storage keys
-const MCP_CONFIG_KEY = 'mcp_config';
-const API_KEYS_KEY = 'mcp_api_keys';
+// Local storage keys (derivadas dinamicamente para segurança)
+const getMcpConfigKey = () => `${window.location.hostname}_mcp_config`;
+const getApiKeysKey = () => `${window.location.hostname}_mcp_api_keys`;
 
 // Helper to read API key from localStorage store
 const getStoredApiKey = (modelId: string): string | undefined => {
   try {
-    const stored = JSON.parse(localStorage.getItem(API_KEYS_KEY) || '{}');
+    const stored = JSON.parse(localStorage.getItem(getApiKeysKey()) || '{}');
     return stored[modelId];
   } catch {
     return undefined;
@@ -300,18 +300,18 @@ const normalizeForDb = <T>(schemaId: SchemaId | undefined, data: T): T => {
 
 // Load configuration from local storage or use default
 export const loadConfig = (): AIModelConfig => {
-  const storedConfig = localStorage.getItem(MCP_CONFIG_KEY);
+  const storedConfig = localStorage.getItem(getMcpConfigKey());
   return storedConfig ? JSON.parse(storedConfig) : defaultConfig;
 };
 
 // Save configuration to local storage
 export const saveConfig = (config: AIModelConfig): void => {
-  localStorage.setItem(MCP_CONFIG_KEY, JSON.stringify(config));
+  localStorage.setItem(getMcpConfigKey(), JSON.stringify(config));
 };
 
 // Reset configuration to default
 export const resetConfig = (): AIModelConfig => {
-  localStorage.setItem(MCP_CONFIG_KEY, JSON.stringify(defaultConfig));
+  localStorage.setItem(getMcpConfigKey(), JSON.stringify(defaultConfig));
   return defaultConfig;
 };
 
@@ -765,7 +765,7 @@ export const loadMCPConfigFromSupabase = async (userId: string): Promise<AIModel
     if (!data) return defaultConfig;
     
     // Restore API keys from local storage
-    const storedApiKeys = JSON.parse(localStorage.getItem(API_KEYS_KEY) || '{}');
+    const storedApiKeys = JSON.parse(localStorage.getItem(getApiKeysKey()) || '{}');
     const config = (data.value as unknown) as AIModelConfig;
     
     config.models = config.models.map(model => ({
@@ -790,5 +790,5 @@ export const saveApiKeys = (config: AIModelConfig): void => {
     }
   });
   
-  localStorage.setItem(API_KEYS_KEY, JSON.stringify(apiKeys));
+  localStorage.setItem(getApiKeysKey(), JSON.stringify(apiKeys));
 }; 

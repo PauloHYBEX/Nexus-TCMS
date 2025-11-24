@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { usePaginationUrlSync } from '@/hooks/usePaginationUrlSync';
+import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,11 +32,19 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export const TestPlans = () => {
+  const { initFromSearchParams, writeFromState } = usePaginationUrlSync();
   const { user } = useAuth();
   const { currentProject, projects, refreshProjects } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
   const { getLabelFor, options } = useStatusOptions(currentProject?.id);
   const { toast } = useToast();
+  
+  // Refs para cálculo de altura virtual
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const listHeaderRef = useRef<HTMLDivElement | null>(null);
+  const listCardRef = useRef<HTMLDivElement | null>(null);
+  const paginationRef = useRef<HTMLDivElement | null>(null);
+  const [rowSize, setRowSize] = useState<number>(72);
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -47,14 +57,18 @@ export const TestPlans = () => {
   const [sortBy, setSortBy] = useState<'title' | 'created_at' | 'updated_at' | 'sequence'>('updated_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchParams, setSearchParams] = useSearchParams();
-  const [filterStatus, setFilterStatus] = useState<string | 'all'>(searchParams.get('status') || 'all');
-  // Removido filtro de projeto local. Vamos usar currentProject global (ou 'Todos' agregando ativos).
+  const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
   const [editingPlan, setEditingPlan] = useState<TestPlan | null>(null);
-  // Pagination state
+  // Paginação via hook
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(9);
-  // Search state
-  const [searchTerm, setSearchTerm] = useState<string>(searchParams.get('q') || '');
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  // Estados para hook de paginação
+  const [q, setQ] = useState('');
+  const [dateStart, setDateStart] = useState<string>('');
+  const [dateEnd, setDateEnd] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'plan' | 'case' | 'execution'>('all');
+  const [applied, setApplied] = useState<{ q: string; dateStart?: string; dateEnd?: string; type: 'all' | 'plan' | 'case' | 'execution' }>({ q: '', type: 'all' });
   // Delete confirmation state
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<TestPlan | null>(null);
@@ -134,30 +148,20 @@ export const TestPlans = () => {
     }
   }, [searchParams, plans]);
 
-  // Read pagination from URL
+  // Inicializar filtros via hook
   useEffect(() => {
-    const sp = searchParams.get('page');
-    const ps = searchParams.get('pageSize');
-    const p = sp ? Math.max(1, parseInt(sp, 10) || 1) : 1;
-    const s = ps ? Math.max(1, parseInt(ps, 10) || 9) : 9;
-    if (p !== page) setPage(p);
-    if (s !== pageSize) setPageSize(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    initFromSearchParams({ setQ, setDateStart, setDateEnd, setTypeFilter, setApplied, setPage });
+    // Sincronizar searchTerm com q
+    setSearchTerm(q);
+    // Manter compatibilidade com filterStatus
+    const status = searchParams.get('status') || 'all';
+    setFilterStatus(status);
+  }, [initFromSearchParams, q, searchParams]);
 
-  // Restaurar busca via URL (?q=)
+  // Sincronizar applied com URL
   useEffect(() => {
-    const q = searchParams.get('q');
-    if (q !== null) setSearchTerm(q);
-  }, [searchParams]);
-
-  // Restaurar filtro via URL (?status=)
-  useEffect(() => {
-    const s = searchParams.get('status');
-    setFilterStatus((s as any) || 'all');
-  }, [searchParams]);
-
-  // Removido: filtro de projeto via URL. O controle é global.
+    writeFromState(applied, page);
+  }, [applied, page, writeFromState]);
 
   // Salvar preferência de visualização
   useEffect(() => {
@@ -235,12 +239,17 @@ export const TestPlans = () => {
 
   // Classes de badge por status (conhecidos) com fallback
   const statusClasses = (status: string) => (
-    status === 'active' ? 'bg-green-50 text-green-700 border-green-200' :
-    status === 'review' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-    status === 'approved' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-    status === 'archived' ? 'bg-red-50 text-red-700 border-red-200' :
-    status === 'draft' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-    'bg-gray-50 text-gray-700 border-gray-200'
+    status === 'active'
+      ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-400/15 dark:text-green-300 dark:border-transparent dark:ring-1 dark:ring-green-400/25'
+      : status === 'review'
+      ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-400/15 dark:text-yellow-300 dark:border-transparent dark:ring-1 dark:ring-yellow-400/25'
+      : status === 'approved'
+      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-400/15 dark:text-blue-300 dark:border-transparent dark:ring-1 dark:ring-blue-400/25'
+      : status === 'archived'
+      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-400/15 dark:text-red-300 dark:border-transparent dark:ring-1 dark:ring-red-400/25'
+      : status === 'draft'
+      ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
+      : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
   );
 
   // Derived pagination data
@@ -257,37 +266,32 @@ export const TestPlans = () => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  // Sync page & pageSize to URL
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    params.set('page', String(currentPage));
-    params.set('pageSize', String(pageSize));
-    setSearchParams(params);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize]);
-
-  // Sync filter status to URL and reset to first page
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    if (filterStatus && filterStatus !== 'all') params.set('status', String(filterStatus));
-    else params.delete('status');
-    setSearchParams(params);
-    setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterStatus]);
+  // Hook de altura virtual para lista
+  const { listHeight } = useVirtualTableHeight({
+    containerRef,
+    listHeaderRef,
+    listCardRef,
+    paginationRef,
+    rowSize,
+    pageSize,
+    totalItems,
+    currentPage,
+    minHeight: 240,
+  });
 
   // Scroll to top when page or pageSize changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [currentPage, pageSize]);
 
-  // Atualiza URL ao mudar busca
+  // Atualiza busca via hooks
   const handleSearchTermChange = (val: string) => {
     setSearchTerm(val);
+    setQ(val);
+    const nextApplied = { ...applied, q: val };
+    setApplied(nextApplied);
     setPage(1);
-    const params = new URLSearchParams(searchParams);
-    if (val) params.set('q', val); else params.delete('q');
-    setSearchParams(params);
+    writeFromState(nextApplied, 1);
   };
 
   // Removido: manipulador de filtro de projeto local.
@@ -488,7 +492,7 @@ export const TestPlans = () => {
   }
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <div ref={containerRef} className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="pl-24">
@@ -496,6 +500,7 @@ export const TestPlans = () => {
           <p className="text-sm text-muted-foreground">Gerencie seus planos de teste</p>
         </div>
         <StandardButton 
+          variant="brand"
           onClick={() => {
             setShowForm(true);
             setEditingPlan(null);
@@ -504,7 +509,6 @@ export const TestPlans = () => {
             params.delete('id');
             setSearchParams(params);
           }}
-          className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
           disabled={!currentProject || currentProject.status !== 'active'}
           title={!currentProject ? 'Selecione um projeto ativo para criar planos' : (currentProject.status !== 'active' ? 'Projeto não ativo — criação desabilitada' : undefined)}
         >
@@ -631,7 +635,7 @@ export const TestPlans = () => {
       <div className="flex-1">
         {plans.length > 0 ? (
           viewMode === 'cards' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div ref={listCardRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredAndSortedPlans.length > 0 ? paginatedPlans.map((plan) => (
                 <Card
                   key={plan.id}
@@ -685,9 +689,9 @@ export const TestPlans = () => {
             // Lista em formato tabela
             <div className="space-y-2">
               {filteredAndSortedPlans.length > 0 ? (
-                <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <div ref={listCardRef} className="bg-card border border-border rounded-lg overflow-hidden">
                   {/* Header da tabela */}
-                  <div className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <div ref={listHeaderRef} className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
                     <div>ID</div>
                     <div className="text-center pt-px">Título</div>
                     <div className="text-center">Projeto</div>
@@ -784,6 +788,7 @@ export const TestPlans = () => {
               Comece criando seu primeiro plano de teste
             </p>
             <StandardButton 
+              variant="brand"
               onClick={() => {
                 setShowForm(true);
                 const params = new URLSearchParams(searchParams);
@@ -791,7 +796,6 @@ export const TestPlans = () => {
                 params.delete('id');
                 setSearchParams(params);
               }}
-              className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
               disabled={!currentProject || currentProject.status !== 'active'}
               title={!currentProject ? 'Selecione um projeto ativo para criar planos' : (currentProject.status !== 'active' ? 'Projeto não ativo — criação desabilitada' : undefined)}
             >
@@ -847,7 +851,7 @@ export const TestPlans = () => {
 
       {/* Pagination controls */}
       {plans.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
+        <div ref={paginationRef} className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
           <div className="text-sm text-muted-foreground mb-2 sm:mb-0">
           {(() => {
             const start = (currentPage - 1) * pageSize + 1;

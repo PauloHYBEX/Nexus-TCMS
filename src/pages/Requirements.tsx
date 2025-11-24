@@ -37,6 +37,19 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
   const { hasPermission } = usePermissions();
   const location = useLocation();
   const navigate = useNavigate();
+  const BASE_PATH = '/requirements';
+
+  // Constrói um conjunto seguro de query params permitido pela tela
+  const buildSafeSearchParams = (sourceSearch: string) => {
+    const source = new URLSearchParams(sourceSearch);
+    const params = new URLSearchParams();
+    const allowedKeys = ['id', 'modal', 'openCreate'];
+    for (const key of allowedKeys) {
+      const value = source.get(key);
+      if (value !== null) params.set(key, value);
+    }
+    return params;
+  };
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -76,7 +89,7 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
 
   // Deep-link: abre modal de visualização por padrão, ou edição quando modal=req:edit
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     const id = params.get('id');
     const modal = params.get('modal');
     const openCreateFlag = params.get('openCreate');
@@ -91,20 +104,20 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
       openCreate();
       // limpar flag para evitar abrir repetidamente
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, requirements]);
 
   const clearIdParam = () => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     if (params.has('id')) {
       params.delete('id');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('openCreate')) {
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
   };
 
@@ -156,19 +169,19 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
     setStatus(req.status);
     setShowForm(true);
     // Escreve o id na URL para deep-link
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', req.id);
     params.set('modal', 'req:edit');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
   };
 
   const handleViewDetails = (req: Requirement) => {
     setSelectedReq(req);
     setShowDetailModal(true);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', req.id);
     params.set('modal', 'req:view');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
   };
 
   const submit = async () => {
@@ -294,8 +307,8 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
                 <div className="flex justify-end gap-2">
                   <StandardButton variant="outline" onClick={closeForm}>Cancelar</StandardButton>
                   <StandardButton 
+                    variant="brand"
                     onClick={submit}
-                    className={!editing ? 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0' : ''}
                   >
                     {editing ? 'Salvar' : 'Criar'}
                   </StandardButton>
@@ -356,10 +369,10 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
               <div className="flex justify-end gap-2">
                 <StandardButton variant="outline" onClick={closeForm}>Cancelar</StandardButton>
                 <StandardButton 
+                  variant="brand"
                   onClick={submit}
                   disabled={!hasPermission('can_manage_cases') || !currentProject || isProjectInactive}
                   title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação/edição desabilitada' : undefined)}
-                  className={!editing ? 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0' : ''}
                 >
                   {editing ? 'Salvar' : 'Criar'}
                 </StandardButton>
@@ -515,10 +528,10 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
         onClose={() => {
           setShowDetailModal(false);
           setSelectedReq(null);
-          const params = new URLSearchParams(location.search);
+          const params = buildSafeSearchParams(location.search);
           params.delete('id');
           if (params.get('modal') === 'req:view') params.delete('modal');
-          navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+          navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
         }}
         item={selectedReq}
         type="requirement"

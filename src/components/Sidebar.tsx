@@ -128,7 +128,7 @@ export const Sidebar = () => {
             {isExpanded ? (
               <div className="flex items-center gap-2">
                 <KrigzisLogo size={24} className="h-6 w-6" />
-                <h1 className="text-xl font-bold text-sidebar-foreground">Krigzis TCMS</h1>
+                <h1 className="text-xl font-bold text-sidebar-foreground">TestPilot AI</h1>
               </div>
             ) : (
               <KrigzisLogo size={24} className="h-6 w-6" />
@@ -150,7 +150,7 @@ export const Sidebar = () => {
                     "flex items-center py-2 text-sm font-medium rounded-lg transition-colors",
                     isExpanded ? "px-3 justify-start" : "px-2 justify-center",
                     isActive
-                      ? "bg-brand text-brand-foreground"
+                      ? "accent-gradient-bg-soft text-brand-foreground"
                       : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   )}
                   title={!isExpanded ? item.name : undefined}
@@ -239,7 +239,7 @@ export const Sidebar = () => {
                           "flex items-center py-2 text-sm font-medium rounded-lg transition-colors",
                           "px-3 justify-start",
                           isActive
-                            ? "bg-brand text-brand-foreground"
+                            ? "accent-gradient-bg-soft text-brand-foreground"
                             : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                         )}
                       >
@@ -298,7 +298,7 @@ export const Sidebar = () => {
                             "flex items-center py-2 text-sm font-medium rounded-lg transition-colors",
                             "px-3 justify-start",
                             isActive
-                              ? "bg-brand text-brand-foreground"
+                              ? "accent-gradient-bg-soft text-brand-foreground"
                               : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                           )}
                         >

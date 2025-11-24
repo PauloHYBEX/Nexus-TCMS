@@ -2,13 +2,25 @@ import { supabase } from '@/integrations/supabase/client';
 import { TestPlan, TestCase, TestExecution, TestStep, Requirement, Defect } from '@/types';
 
 // Utilitário: registra ação no histórico do usuário (silencioso em caso de erro)
-export const logActivity = async (action: string, context?: string, userIdOverride?: string) => {
+export const logActivity = async (
+  action: string,
+  context?: string,
+  userIdOrMetadata?: string | Record<string, any>,
+  maybeMetadata?: Record<string, any>
+) => {
   try {
-    let uid = userIdOverride;
+    let uid: string | undefined;
+    let metadata: Record<string, any> | undefined;
+    if (typeof userIdOrMetadata === 'string' || typeof userIdOrMetadata === 'undefined') {
+      uid = userIdOrMetadata as string | undefined;
+      metadata = maybeMetadata;
+    } else {
+      metadata = userIdOrMetadata as Record<string, any>;
+    }
     const auth = await supabase.auth.getUser();
-    if (!uid) uid = auth?.data?.user?.id;
+    if (!uid) uid = auth?.data?.user?.id as string | undefined;
     if (!uid) return;
-    await supabase.from('activity_logs' as any).insert({ user_id: uid, action, context });
+    await supabase.from('activity_logs' as any).insert({ user_id: uid, action, context, metadata });
   } catch (e) {
     // não interrompe o fluxo principal
     console.warn('[logActivity] falha ao registrar log:', e);
@@ -63,6 +75,49 @@ const withUserScope = <Q>(query: any, userId?: string) => {
   if (SHARED_DATA) return query; // base compartilhada
   if (userId) return query.eq('user_id', userId);
   return query;
+};
+
+// =====================
+// Activity Logs
+// =====================
+export interface ActivityLog {
+  id: string;
+  user_id: string;
+  action: string;
+  context?: string | null;
+  metadata?: any;
+  created_at: Date;
+}
+
+export const getActivityLogs = async (
+  _userId: string,
+  opts?: { dateStart?: Date; dateEnd?: Date }
+): Promise<ActivityLog[]> => {
+  let query = supabase
+    .from('activity_logs')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (opts?.dateStart) {
+    query = query.gte('created_at', opts.dateStart.toISOString());
+  }
+  if (opts?.dateEnd) {
+    query = query.lte('created_at', opts.dateEnd.toISOString());
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error('Erro ao buscar activity_logs:', error);
+    throw error;
+  }
+  return (data || []).map((r: any) => ({
+    id: r.id,
+    user_id: r.user_id,
+    action: r.action,
+    context: r.context ?? null,
+    metadata: r.metadata ?? null,
+    created_at: new Date(r.created_at)
+  }));
 };
 
 // Funções para Planos de Teste
@@ -203,7 +258,12 @@ export const createTestPlan = async (plan: Omit<TestPlan, 'id' | 'created_at' | 
 
   // Log: Plano criado
   try {
-    await logActivity(`Plano criado ${labelPT(data)}`, `Plano de Teste criado — Título: ${data.title || ''}`);
+    await logActivity(
+      `Plano criado ${labelPT(data)}`,
+      `Plano de Teste criado — Título: ${data.title || ''}`,
+      undefined,
+      { entity: 'plan', id: data.id }
+    );
   } catch {}
 
   return {
@@ -234,7 +294,12 @@ export const updateTestPlan = async (id: string, updates: Partial<TestPlan>): Pr
     const fields = Object.keys(cleanUpdates).map(k => ({
       title: 'título', description: 'descrição', objective: 'objetivo', scope: 'escopo', approach: 'abordagem', criteria: 'critérios'
     } as any)[k] || k).join(', ');
-    await logActivity(`Plano atualizado ${labelPT(data)}`, `Plano de Teste atualizado — Campos: ${fields}`);
+    await logActivity(
+      `Plano atualizado ${labelPT(data)}`,
+      `Plano de Teste atualizado — Campos: ${fields}`,
+      undefined,
+      { entity: 'plan', id: data.id }
+    );
   } catch {}
 
   return {
@@ -254,7 +319,7 @@ export const deleteTestPlan = async (id: string) => {
   if (error) {
     throw new Error(`Erro ao excluir plano de teste: ${error.message}`);
   }
-  try { await logActivity(`Plano excluído ${labelPT(row)}`, `Plano de Teste excluído — Título: ${row?.title || ''}`); } catch {}
+  try { await logActivity(`Plano excluído ${labelPT(row)}`, `Plano de Teste excluído — Título: ${row?.title || ''}`, undefined, { entity: 'plan', id }); } catch {}
 };
 
 // Contadores de vínculos de um plano
@@ -452,7 +517,7 @@ export const createTestCase = async (testCase: Omit<TestCase, 'id' | 'created_at
 
   // Log: Caso criado
   try {
-    await logActivity(`Caso criado ${labelCT(data)}`, `Caso de Teste criado — Título: ${data.title || ''}`);
+    await logActivity(`Caso criado ${labelCT(data)}`, `Caso de Teste criado — Título: ${data.title || ''}`, undefined, { entity: 'case', id: data.id });
   } catch {}
 
   return {
@@ -501,7 +566,7 @@ export const updateTestCase = async (id: string, updates: Partial<TestCase>): Pr
     const fields = Object.keys(updateData).filter(k => k !== 'updated_at').map(k => ({
       title: 'título', description: 'descrição', priority: 'prioridade', type: 'tipo', steps: 'passos'
     } as any)[k] || k).join(', ');
-    await logActivity(`Caso atualizado ${labelCT(data)}`, `Caso de Teste atualizado — Campos: ${fields}`);
+    await logActivity(`Caso atualizado ${labelCT(data)}`, `Caso de Teste atualizado — Campos: ${fields}`, undefined, { entity: 'case', id: data.id });
   } catch {}
 
   return {
@@ -524,7 +589,7 @@ export const deleteTestCase = async (id: string) => {
   if (error) {
     throw new Error(`Erro ao excluir caso de teste: ${error.message}`);
   }
-  try { await logActivity(`Caso excluído ${labelCT(row)}`, `Caso de Teste excluído — Título: ${row?.title || ''}`); } catch {}
+  try { await logActivity(`Caso excluído ${labelCT(row)}`, `Caso de Teste excluído — Título: ${row?.title || ''}`, undefined, { entity: 'case', id }); } catch {}
 };
 
 // Funções para Execuções de Teste
@@ -616,7 +681,7 @@ export const createTestExecution = async (execution: Omit<TestExecution, 'id' | 
   // Log de criação da execução (amigável)
   try {
     const context = `Execução de Teste criada — Status: ${ptStatus(data.status)}${data.actual_result ? `; Resultado: ${truncate(data.actual_result, 80)}` : ''}`;
-    await logActivity(`Execução criada ${labelEXE(data)}`, context);
+    await logActivity(`Execução criada ${labelEXE(data)}`, context, undefined, { entity: 'execution', id: data.id });
   } catch {}
 
   return {
@@ -655,7 +720,7 @@ export const updateTestExecution = async (id: string, updates: Partial<TestExecu
         const extras = cleanUpdates.status ? ` — Novo status: ${ptStatus(cleanUpdates.status as any)}` : '';
         const snippet = cleanUpdates.actual_result ? `; Resultado: ${truncate(String(cleanUpdates.actual_result), 80)}` : '';
         const context = `Execução de Teste atualizada — Campos: ${fields}${extras}${snippet}`;
-        await logActivity(`Execução atualizada ${labelEXE(row)}`, context);
+        await logActivity(`Execução atualizada ${labelEXE(row)}`, context, undefined, { entity: 'execution', id: row.id });
       } catch {}
       return {
         ...row,
@@ -673,7 +738,7 @@ export const updateTestExecution = async (id: string, updates: Partial<TestExecu
     const extras = cleanUpdates.status ? ` — Novo status: ${ptStatus(cleanUpdates.status as any)}` : '';
     const snippet = cleanUpdates.actual_result ? `; Resultado: ${truncate(String(cleanUpdates.actual_result), 80)}` : '';
     const context = `Execução de Teste atualizada — Campos: ${fields}${extras}${snippet}`;
-    await logActivity(`Execução atualizada ${labelEXE({ id })}`, context);
+    await logActivity(`Execução atualizada ${labelEXE({ id })}`, context, undefined, { entity: 'execution', id });
   } catch {}
   return {
     id: id,
@@ -694,7 +759,7 @@ export const deleteTestExecution = async (id: string) => {
     throw new Error(`Erro ao excluir execução de teste: ${error.message}`);
   }
   try {
-    await logActivity(`Execução excluída ${labelEXE(row)}`, `Execução removida — Status: ${row?.status ? ptStatus(row?.status) : ''}`);
+    await logActivity(`Execução excluída ${labelEXE(row)}`, `Execução removida — Status: ${row?.status ? ptStatus(row?.status) : ''}`, undefined, { entity: 'execution', id });
   } catch {}
 };
 
@@ -740,7 +805,7 @@ export const createRequirement = async (req: Omit<Requirement, 'id' | 'created_a
 
   // Log: Requisito criado
   try {
-    await logActivity(`Requisito criado ${labelREQ(data)}`, `Requisito criado — Título: ${data.title || ''}`);
+    await logActivity(`Requisito criado ${labelREQ(data)}`, `Requisito criado — Título: ${data.title || ''}`, undefined, { entity: 'requirement', id: data.id });
   } catch {}
 
   return {
@@ -769,7 +834,7 @@ export const updateRequirement = async (id: string, updates: Partial<Requirement
   // Log: Requisito atualizado
   try {
     const fields = Object.keys(clean).map(k => ({ title: 'título', description: 'descrição', priority: 'prioridade', status: 'status' } as any)[k] || k).join(', ');
-    await logActivity(`Requisito atualizado ${labelREQ(data)}`, `Requisito atualizado — Campos: ${fields}`);
+    await logActivity(`Requisito atualizado ${labelREQ(data)}`, `Requisito atualizado — Campos: ${fields}`, undefined, { entity: 'requirement', id: data.id });
   } catch {}
 
   return {
@@ -790,7 +855,7 @@ export const deleteRequirement = async (id: string) => {
   if (error) {
     throw new Error(`Erro ao excluir requisito: ${error.message}`);
   }
-  try { await logActivity(`Requisito excluído ${labelREQ(row)}`, `Requisito excluído — Título: ${row?.title || ''}`); } catch {}
+  try { await logActivity(`Requisito excluído ${labelREQ(row)}`, `Requisito excluído — Título: ${row?.title || ''}`, undefined, { entity: 'requirement', id }); } catch {}
 };
 
 // Vínculos requisito ↔ caso

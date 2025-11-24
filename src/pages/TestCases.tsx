@@ -1,4 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { usePaginationUrlSync } from '@/hooks/usePaginationUrlSync';
+import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,7 +32,15 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export const TestCases = () => {
+  const { initFromSearchParams, writeFromState } = usePaginationUrlSync();
   const { user } = useAuth();
+  
+  // Refs para altura virtual
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const listHeaderRef = useRef<HTMLDivElement | null>(null);
+  const listCardRef = useRef<HTMLDivElement | null>(null);
+  const paginationRef = useRef<HTMLDivElement | null>(null);
+  const [rowSize, setRowSize] = useState<number>(72);
   const { toast } = useToast();
   const { currentProject, projects } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
@@ -48,12 +58,13 @@ export const TestCases = () => {
     const savedMode = localStorage.getItem('testCases_viewMode');
     return (savedMode as 'cards' | 'list') || 'list';
   });
-  const [sortBy, setSortBy] = useState<'title' | 'created_at' | 'updated_at' | 'priority'>('updated_at');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(9);
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(9);
+  const [q, setQ] = useState('');
+  const [dateStart, setDateStart] = useState<string>('');
+  const [dateEnd, setDateEnd] = useState<string>('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'plan' | 'case' | 'execution'>('all');
+  const [applied, setApplied] = useState<{ q: string; dateStart?: string; dateEnd?: string; type: 'all' | 'plan' | 'case' | 'execution' }>({ q: '', type: 'all' });
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [planProjectMap, setPlanProjectMap] = useState<Record<string, string>>({});
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -316,8 +327,8 @@ export const TestCases = () => {
           <p className="text-sm text-muted-foreground">Gerencie seus casos de teste</p>
         </div>
         <StandardButton 
+          variant="brand"
           onClick={() => setShowForm(true)}
-          className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
           disabled={!currentProject || currentProject.status !== 'active'}
           title={!currentProject ? 'Selecione um projeto ativo para criar casos' : (currentProject.status !== 'active' ? 'Projeto não ativo — criação desabilitada' : undefined)}
         >
@@ -585,8 +596,8 @@ export const TestCases = () => {
                 Comece criando seu primeiro caso de teste
               </p>
               <StandardButton
+                variant="brand"
                 onClick={() => setShowForm(true)}
-                className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
                 disabled={!currentProject || currentProject.status !== 'active'}
                 title={!currentProject ? 'Selecione um projeto ativo para criar casos' : (currentProject.status !== 'active' ? 'Projeto não ativo — criação desabilitada' : undefined)}
               >

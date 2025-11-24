@@ -66,11 +66,24 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const [status, setStatus] = useState<Defect['status']>('open');
   const [caseId, setCaseId] = useState<string>('');
   const [executionId, setExecutionId] = useState<string>('');
+  const BASE_PATH = '/defects';
+  
+  // Constrói um conjunto seguro de query params permitido pela tela
+  const buildSafeSearchParams = (sourceSearch: string) => {
+    const source = new URLSearchParams(sourceSearch);
+    const params = new URLSearchParams();
+    const allowedKeys = ['id', 'modal', 'openCreate', 'cases'];
+    for (const key of allowedKeys) {
+      const value = source.get(key);
+      if (value !== null) params.set(key, value);
+    }
+    return params;
+  };
   const clearCaseFilter = () => {
     setFilterCaseIds([]);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.delete('cases');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
   };
 
   useEffect(() => {
@@ -104,7 +117,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
 
   // Deep-link: abrir modal ao detectar ?id=
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     const id = params.get('id');
     const modal = params.get('modal');
     const openCreateFlag = params.get('openCreate');
@@ -126,24 +139,24 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
       openCreate();
       // limpar flag após abrir para evitar reabertura
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, defects]);
 
   const clearIdParam = () => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     if (params.has('id')) {
       params.delete('id');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('modal')) {
       params.delete('modal');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('openCreate')) {
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
     }
   };
 
@@ -212,10 +225,10 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     setCaseId(d.case_id || '');
     setExecutionId(d.execution_id || '');
     setShowForm(true);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
     params.set('modal', 'defect:edit');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
     // carregar execuções do caso (se houver)
     if (d.case_id && user) {
       getTestExecutions(user.id, undefined, d.case_id).then(execList => setCaseExecutions(execList)).catch(() => setCaseExecutions([]));
@@ -227,10 +240,10 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const handleViewDetails = (d: Defect) => {
     setSelectedDefect(d);
     setShowDetailModal(true);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
     params.set('modal', 'defect:view');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
   };
 
   const submit = async () => {

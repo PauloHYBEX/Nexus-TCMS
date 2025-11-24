@@ -7,9 +7,18 @@ import { createClient } from '@supabase/supabase-js';
 // Carregar variáveis de ambiente
 config();
 
-// Configurações do Supabase
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://mhhzdykyjgrnprcyhlbz.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1oaHpkeWt5amdybnByY3lobGJ6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODU1MjQzNSwiZXhwIjoyMDY0MTI4NDM1fQ.1EOupf8MC-cXz9BBHvGLT0i-gcvHHeHrUw1xxWDLyzY';
+// Configurações do Supabase (exigir via ambiente)
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl) {
+  console.error('❌ VITE_SUPABASE_URL não definido no ambiente. Configure no .env');
+  process.exit(1);
+}
+if (!supabaseServiceKey) {
+  console.error('❌ SUPABASE_SERVICE_ROLE_KEY não definido no ambiente. NUNCA versione esta chave. Configure no .env');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 

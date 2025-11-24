@@ -18,9 +18,12 @@ export interface PublicProfile {
   google_url?: string | null;
   website_url?: string | null;
   tags?: any[] | null;
+  role?: string | null;
 }
 
 type FunctionRole = 'desenvolvimento' | 'suporte' | 'gerencia' | 'supervisao' | 'visualizador';
+
+type UserRole = 'master' | 'admin' | 'manager' | 'tester' | 'viewer';
 
 const roleLabel: Record<FunctionRole, string> = {
   desenvolvimento: 'Desenvolvimento',
@@ -28,6 +31,14 @@ const roleLabel: Record<FunctionRole, string> = {
   gerencia: 'Gerência',
   supervisao: 'Supervisão',
   visualizador: 'Visualizador',
+};
+
+const userRoleLabel: Record<UserRole, string> = {
+  master: 'Master',
+  admin: 'Administrador',
+  manager: 'Gerência',
+  tester: 'Testador',
+  viewer: 'Visualizador',
 };
 
 const RoleIcon: Record<FunctionRole, React.ComponentType<any>> = {
@@ -90,7 +101,7 @@ export const UserProfileModal: React.FC<{
         if (!SINGLE_TENANT) {
           const { data, error } = await supabase
             .from('profiles' as any)
-            .select('id, display_name, email, avatar_url, github_url, google_url, website_url')
+            .select('id, display_name, email, avatar_url, github_url, google_url, website_url, role')
             .eq('id', userId)
             .maybeSingle();
           if (!error && data) {
@@ -171,20 +182,12 @@ export const UserProfileModal: React.FC<{
             <div className="text-lg font-semibold">{profile?.display_name || 'Usuário'}</div>
           </div>
 
-          {/* Cargos (tag de cargo) centralizados imediatamente abaixo do nome */}
-          {roles.length > 0 && (
-            <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
-              {roles.map((r, idx) => {
-                const key = r.role as FunctionRole;
-                const IconC = RoleIcon[key] || TagIcon;
-                return (
-                  <span key={`role-${idx}`} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-muted text-muted-foreground border">
-                    <IconC className="h-3 w-3" /> <span className="text-emerald-300 font-semibold">{roleLabel[key]}</span>
-                  </span>
-                );
-              })}
-            </div>
-          )}
+          {/* Cargo principal (profiles.role) */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[11px] bg-muted text-muted-foreground border">
+              <TagIcon className="h-3 w-3" /> <span className="text-emerald-300 font-semibold">{userRoleLabel[(profile?.role as UserRole) || 'viewer']}</span>
+            </span>
+          </div>
 
           {/* Ícones de links (email, GitHub, Google, website) */}
           {(profile?.email || profile?.github_url || profile?.google_url || profile?.website_url) && (

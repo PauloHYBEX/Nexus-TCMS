@@ -8,6 +8,14 @@ import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types'
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+
+const userRoleLabel: Record<string, string> = {
+  master: 'Master',
+  admin: 'Administrador',
+  manager: 'Gerência',
+  tester: 'Testador',
+  viewer: 'Visualizador',
+};
 import * as ModelControlService from '@/services/modelControlService';
 import {
   AlertDialog,
@@ -54,9 +62,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [additionalContext, setAdditionalContext] = useState('');
   const [selectedModelId, setSelectedModelId] = useState<string>('default');
-  const [author, setAuthor] = useState<{ id: string; email?: string; display_name?: string; avatar_url?: string; github_url?: string; google_url?: string; website_url?: string; tags?: any[] } | null>(null);
+  const [author, setAuthor] = useState<{ id: string; email?: string; display_name?: string; avatar_url?: string; github_url?: string; google_url?: string; website_url?: string; tags?: any[]; role?: string } | null>(null);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
-  const [authorRoles, setAuthorRoles] = useState<Array<{ role: 'desenvolvimento' | 'suporte' | 'gerencia' | 'supervisao' | 'visualizador'; icon?: string }>>([]);
   const [authorTags, setAuthorTags] = useState<Array<{ label: string; icon?: string }>>([]);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
@@ -161,27 +168,13 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       if (!isOpen || !item || !('user_id' in (item as any))) return;
       const uid = (item as any).user_id as string;
       try {
-        // Buscar roles/cargos do autor (sempre que possível)
-        try {
-          const { data: rolesRows } = await supabase
-            .from('profile_function_roles' as any)
-            .select('role, icon')
-            .eq('user_id', uid);
-          if (Array.isArray(rolesRows)) {
-            setAuthorRoles(rolesRows as any);
-          } else {
-            setAuthorRoles([]);
-          }
-        } catch {
-          setAuthorRoles([]);
-        }
         if (!SINGLE_TENANT) {
           let data: any | null = null;
           let error: any | null = null;
           try {
             const res = await supabase
               .from('profiles' as any)
-              .select('id, email, display_name, avatar_url, github_url, google_url, website_url, tags')
+              .select('id, email, display_name, avatar_url, github_url, google_url, website_url, tags, role')
               .eq('id', uid)
               .maybeSingle();
             data = res.data; error = res.error;
@@ -198,6 +191,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
               google_url: (data as any).google_url,
               website_url: (data as any).website_url,
               tags: (data as any).tags || [],
+              role: (data as any).role,
             });
             if (Array.isArray((data as any).tags)) setAuthorTags((data as any).tags);
             return;
@@ -206,11 +200,11 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           try {
             const resBasic = await supabase
               .from('profiles' as any)
-              .select('id, email, display_name, tags')
+              .select('id, email, display_name, tags, role')
               .eq('id', uid)
               .maybeSingle();
             if (resBasic.data && !resBasic.error) {
-              setAuthor({ id: resBasic.data.id, email: resBasic.data.email, display_name: resBasic.data.display_name, tags: (resBasic.data as any).tags || [] });
+              setAuthor({ id: resBasic.data.id, email: resBasic.data.email, display_name: resBasic.data.display_name, tags: (resBasic.data as any).tags || [], role: (resBasic.data as any).role });
               const t = (resBasic.data as any).tags; if (Array.isArray(t)) setAuthorTags(t);
               return;
             }
@@ -236,7 +230,6 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         }
       } catch {
         setAuthor({ id: uid });
-        setAuthorRoles([]);
         setAuthorTags([]);
       }
     };
@@ -566,17 +559,11 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
               <button type="button" className="text-brand hover:underline focus:outline-none bg-transparent border-0 p-0 h-auto" onClick={() => setShowAuthorModal(true)} title="Abrir perfil">
                 {author?.display_name || author?.email || 'ver perfil'}
               </button>
-              {authorRoles.length > 0 && (
+              {author?.role && (
                 <span className="flex items-center gap-1 flex-wrap">
-                  {authorRoles.map((r, idx) => {
-                    const IconC = r.role === 'desenvolvimento' ? Code : r.role === 'suporte' ? LifeBuoy : r.role === 'gerencia' ? Briefcase : r.role === 'supervisao' ? Shield : Eye;
-                    const label = r.role.charAt(0).toUpperCase() + r.role.slice(1);
-                    return (
-                      <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border">
-                        <IconC className="h-3.5 w-3.5" /> {label}
-                      </span>
-                    );
-                  })}
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border">
+                    {userRoleLabel[author.role] || author.role}
+                  </span>
                 </span>
               )}
             </div>
