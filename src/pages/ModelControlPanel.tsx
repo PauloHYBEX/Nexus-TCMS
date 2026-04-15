@@ -16,7 +16,7 @@ import { PermissionGuard } from '@/components/PermissionGuard';
 import { AIModel, AIPromptTemplate, AIModelTask, AIModelConfig } from '@/types';
 import type { ProviderModel } from '@/services/modelControlService';
 import * as ModelControlService from '@/services/modelControlService';
-import { generateText } from '@/integrations/gemini/client';
+import { generateText, geminiGenerateText } from '@/integrations/gemini/client';
 import { openAIGenerateText } from '@/integrations/openai/client';
 import { anthropicGenerateText } from '@/integrations/anthropic/client';
 import { groqGenerateText } from '@/integrations/groq/client';
@@ -257,23 +257,30 @@ export const ModelControlPanel = () => {
     try {
       const model = overrideModelId ? config?.models.find(m => m.id === overrideModelId) : resolveModelForTest();
       if (!model) throw new Error('Nenhum modelo selecionado');
-      if (testApiKey.trim() && providerRequiresApiKey(model.provider) && config) {
-        const idx = config.models.findIndex(m => m.id === model.id);
-        if (idx !== -1) {
-          const upd = { ...config, models: [...config.models] };
-          upd.models[idx] = { ...upd.models[idx], apiKey: testApiKey.trim() };
-          setConfig(upd); ModelControlService.saveConfig(upd);
-        }
+
+      // Lê a chave salva no localStorage (igual ao modelControlService)
+      const host = window.location.hostname;
+      const storedKeys: Record<string, string> = JSON.parse(
+        localStorage.getItem(`${host}_mcp_api_keys`) || localStorage.getItem('mcp_api_keys') || '{}'
+      );
+      const resolvedKey = testApiKey.trim() || storedKeys[model.id] || model.apiKey || '';
+
+      // Se o usuário digitou uma chave de teste, persiste para uso futuro
+      if (testApiKey.trim() && providerRequiresApiKey(model.provider)) {
+        storedKeys[model.id] = testApiKey.trim();
+        localStorage.setItem(`${host}_mcp_api_keys`, JSON.stringify(storedKeys));
+        refreshConfig();
       }
+
       const slug = typeof model.settings?.apiModel === 'string' && model.settings.apiModel.trim() ? model.settings.apiModel.trim() : model.id;
       const baseUrl = typeof model.settings?.baseUrl === 'string' ? model.settings.baseUrl : undefined;
       let text = '';
       switch (model.provider) {
-        case 'gemini':     text = await generateText(testPrompt, model.id); break;
-        case 'openai':     text = await openAIGenerateText(testPrompt, slug, model.apiKey || testApiKey.trim()); break;
-        case 'anthropic':  text = await anthropicGenerateText(testPrompt, slug, model.apiKey || testApiKey.trim()); break;
-        case 'groq':       text = await groqGenerateText(testPrompt, slug, model.apiKey || testApiKey.trim()); break;
-        case 'openrouter': text = await openRouterGenerateText(testPrompt, slug, model.apiKey || testApiKey.trim()); break;
+        case 'gemini':     text = await geminiGenerateText(testPrompt, slug, resolvedKey); break;
+        case 'openai':     text = await openAIGenerateText(testPrompt, slug, resolvedKey); break;
+        case 'anthropic':  text = await anthropicGenerateText(testPrompt, slug, resolvedKey); break;
+        case 'groq':       text = await groqGenerateText(testPrompt, slug, resolvedKey); break;
+        case 'openrouter': text = await openRouterGenerateText(testPrompt, slug, resolvedKey); break;
         case 'ollama':     text = await ollamaGenerateText(testPrompt, slug, baseUrl); break;
         default: throw new Error(`Provedor não suportado: ${model.provider}`);
       }
