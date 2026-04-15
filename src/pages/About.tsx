@@ -26,7 +26,7 @@ export const About = () => {
           <CardContent className="space-y-4">
             <div>
               <Label className="text-sm text-muted-foreground">Nome do Sistema</Label>
-              <p className="font-medium">Krigzis web</p>
+              <p className="font-medium">Nexus Testing</p>
             </div>
 
             <div>

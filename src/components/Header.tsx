@@ -45,7 +45,7 @@ export const Header = () => {
   useEffect(() => {
     if (!user || SINGLE_TENANT) return;
 
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let channel: any = null;
 
     const fetchNotifs = async () => {
       // Lista últimas 10
@@ -106,10 +106,10 @@ export const Header = () => {
             <div className="flex items-center gap-2">
               <KrigzisLogo size={24} className="h-6 w-6" />
               <h1 className="text-2xl font-bold text-foreground hidden md:block">
-                Krigzis TCMS
+                Nexus Testing
               </h1>
             </div>
-            <p className="text-sm text-muted-foreground hidden lg:block">
+            <p className="hidden lg:block text-sm font-medium accent-gradient-text opacity-90">
               Geração inteligente de testes
             </p>
             <div className="hidden md:block ml-4">

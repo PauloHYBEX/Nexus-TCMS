@@ -105,34 +105,23 @@ export function VirtualList<T>(props: VirtualListProps<T>) {
             top: 0,
             left: 0,
             width: '100%',
-            height: virtualRow.size,
             transform: `translate3d(0, ${virtualRow.start}px, 0)`,
             contain: 'content',
             willChange: 'transform',
             // Remove margens e paddings indesejados
             margin: 0,
             padding: 0,
-            // Garante que o conteúdo não ultrapasse os limites
-            overflow: 'hidden'
+            // Permitir que o conteúdo defina a altura real da linha
+            overflow: 'visible'
           };
           return (
-            <div key={key} style={rowOuterStyle}>
-              {/* Wrapper interno medido (sem transform) */}
-              <div
-                ref={rowVirtualizer.measureElement}
-                data-index={index}
-                style={{ 
-                  // Remove qualquer padding ou margem que possa estar causando o espaçamento
-                  padding: 0,
-                  margin: 0,
-                  boxSizing: 'border-box',
-                  height: '100%',
-                  // Garante que o conteúdo não ultrapasse os limites
-                  overflow: 'hidden'
-                }}
-              >
-                {renderItem(item, index)}
-              </div>
+            <div
+              key={key}
+              style={rowOuterStyle}
+              ref={rowVirtualizer.measureElement}
+              data-index={index}
+            >
+              {renderItem(item, index)}
             </div>
           );
         })}

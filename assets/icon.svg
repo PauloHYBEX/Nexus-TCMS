@@ -1,25 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="krigzisGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00D4AA;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#7B3FF2;stop-opacity:1" />
-    </linearGradient>
-    <filter id="textShadow">
-      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.3)"/>
-    </filter>
-  </defs>
-  
-  <!-- Fundo circular com gradiente -->
-  <circle cx="256" cy="256" r="230" fill="url(#krigzisGradient)" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
-  
-  <!-- Letra K estilizada -->
-  <text x="256" y="256" 
-        font-family="Arial, sans-serif" 
-        font-size="307" 
-        font-weight="bold" 
-        text-anchor="middle" 
-        dominant-baseline="central" 
-        fill="#FFFFFF" 
-        filter="url(#textShadow)">K</text>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TestPilot AI">
+  <title>TestPilot AI</title>
+  <!-- Fundo circular escuro para contraste em light/dark -->
+  <circle cx="256" cy="256" r="248" fill="#0F1115"/>
+
+  <!-- Martelo simples (sem curvas) + check (brancos) -->
+  <g fill="#FFFFFF" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Cabo inclinado -->
+    <rect x="296" y="228" width="36" height="214" rx="16" transform="rotate(45 314 335)" />
+    <!-- Pescoço -->
+    <rect x="252" y="208" width="30" height="40" rx="10" />
+    <!-- Cabeça retangular -->
+    <rect x="168" y="170" width="204" height="60" rx="14" />
+    <!-- Check espesso -->
+    <path d="M196 326 L240 370 L324 274" fill="none" stroke="#FFFFFF" stroke-width="22"/>
+  </g>
 </svg>

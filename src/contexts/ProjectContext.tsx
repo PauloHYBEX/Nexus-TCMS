@@ -43,12 +43,15 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
           detail: { projectId: project?.id ?? null, project, ts: Date.now() }
         });
         window.dispatchEvent(evt);
-        // Broadcast cross-window (Studio/Web)
-        try { window.postMessage({ type: 'project:changed', project }, '*'); } catch {}
+        // Broadcast cross-window (Studio/Web) restrito à mesma origem
+        try {
+          const origin = window.location.origin;
+          window.postMessage({ type: 'project:changed', project }, origin);
+        } catch (e) { void e; }
       }
       // Invalida e refaz fetch das queries ativas ao trocar de projeto
       queryClient.invalidateQueries({ predicate: () => true, refetchType: 'active' });
-    } catch (e) { /* noop */ }
+    } catch (e) { void e; }
   };
 
   const refreshArchivedProjects = async () => {
@@ -141,6 +144,8 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     // Listener para sincronização via postMessage
     try {
       const onMessage = (ev: MessageEvent) => {
+        // aceitar apenas mensagens da mesma origem
+        if (ev.origin && ev.origin !== window.location.origin) return;
         const d = ev?.data as any;
         if (!d || typeof d !== 'object') return;
         if (d.type === 'project:changed') {
@@ -153,7 +158,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       };
       window.addEventListener('message', onMessage);
       return () => window.removeEventListener('message', onMessage);
-    } catch {}
+    } catch (e) { void e; }
   }, [user]);
 
   const value: ProjectContextType = {

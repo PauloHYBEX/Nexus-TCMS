@@ -66,7 +66,7 @@ export function StatusManagerModal({ open, onOpenChange, projectId, onAdded }: S
                 onChange={(e) => setNewLabel(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAdd(); }}}
               />
-              <StandardButton onClick={handleAdd} className="bg-gradient-to-r from-teal-500 to-emerald-500 text-white">
+              <StandardButton onClick={handleAdd} variant="brand">
                 <Plus className="h-4 w-4 mr-1" />
                 Adicionar
               </StandardButton>

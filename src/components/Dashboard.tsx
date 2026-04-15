@@ -349,8 +349,8 @@ export const Dashboard = () => {
   }
 
   return (
-    <div className="space-y-4 -mx-3 sm:-mx-5 lg:-mx-6 xl:-mx-8 2xl:-mx-16">
-      <div className="flex flex-col gap-4 px-3 sm:px-5 lg:px-6 xl:px-8 2xl:px-16">
+    <div className="space-y-4 px-3 sm:px-5 lg:px-6 xl:px-8 2xl:px-16">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold text-foreground">Bem-vindo, {welcomeName}!</h2>
@@ -359,8 +359,8 @@ export const Dashboard = () => {
             <Dialog open={showForm} onOpenChange={setShowForm}>
               <DialogTrigger asChild>
                 <StandardButton 
-                  icon={Plus} 
-                  className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
+                  icon={Plus}
+                  variant="brand"
                   disabled={!currentProject || currentProject.status !== 'active'}
                   title={!currentProject ? 'Selecione um projeto ativo para criar' : (currentProject.status !== 'active' ? 'Projeto não ativo — ações de criação desabilitadas' : undefined)}
                 >
@@ -384,7 +384,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Stats Cards (compact) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 px-3 sm:px-5 lg:px-6 xl:px-8 2xl:px-16">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
         <Card className="card-hover cursor-pointer" onClick={() => navigate('/plans')}>
           <CardHeader className="p-4 pb-2">
             <div className="flex items-center gap-3">
@@ -447,7 +447,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Progress + Recent grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 px-3 sm:px-5 lg:px-6 xl:px-8 2xl:px-16">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
         {/* Progress */}
         <Card className="xl:col-span-2">
           <CardHeader className="p-4 pb-2">
@@ -518,12 +518,9 @@ export const Dashboard = () => {
                 <h3 className="text-lg font-medium text-foreground mb-2">
                   Nenhuma atividade recente
                 </h3>
-                <p className="text-muted-foreground mb-4">
+                <p className="text-muted-foreground">
                   Comece criando seus primeiros planos, casos ou execuções de teste
                 </p>
-                <StandardButton onClick={() => setShowForm(true)}>
-                  Novo Projeto
-                </StandardButton>
               </div>
             )}
           </CardContent>

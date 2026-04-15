@@ -10,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePermissions, UserRole } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { logActivity } from '@/services/supabaseService';
+import { invalidateUserAvatarCache } from '@/components/ui/UserAvatar';
 // Tipagem local para evitar dependência de types gerados
 type Profile = {
   id: string;
@@ -276,6 +277,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         const { error: upErr } = await supabase.auth.updateUser({ data: { full_name: displayName, avatar_url: avatarUrl, github_url: githubUrl, google_url: googleUrl, website_url: websiteUrl, tags } as any });
         if (upErr) throw upErr;
         toast({ title: 'Perfil atualizado', description: 'Dados atualizados.' });
+        invalidateUserAvatarCache(user.id);
         try { logActivity('profile_saved', 'single_tenant'); } catch {}
         return;
       }
@@ -295,6 +297,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       }
 
       toast({ title: 'Perfil atualizado', description: 'Dados e preferências salvos.' });
+      invalidateUserAvatarCache(user.id);
       try { logActivity('profile_saved', 'multi_tenant'); } catch {}
     } catch (e: any) {
       console.error(e);
@@ -336,6 +339,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         if (profErr) throw profErr;
       }
       toast({ title: 'Avatar atualizado', description: 'Sua foto foi enviada e salva.' });
+      invalidateUserAvatarCache(user.id);
       try { logActivity('avatar_updated'); } catch {}
     } catch (err: any) {
       console.error(err);

@@ -63,12 +63,15 @@ export const Layout = ({ children }: LayoutProps) => {
           )}
         >
           <Header />
-          <main className="flex-1 overflow-auto px-3 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6">
+          <main className={cn(
+            "flex-1 overflow-x-hidden px-3 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6",
+            location.pathname.startsWith('/history') ? 'overflow-hidden' : 'overflow-y-auto'
+          )}>
             {/* Breadcrumbs */}
             <div className="mb-4 sm:mb-6 text-sm text-muted-foreground flex items-center gap-2">
-              <span className="text-foreground font-medium">Krigzis TCMS</span>
+              <span className="text-foreground font-medium">Nexus Testing</span>
               <span className="opacity-70">/</span>
-              <span className="neon-text font-semibold">{currentTitle}</span>
+              <span className="accent-gradient-text font-semibold">{currentTitle}</span>
             </div>
             <Outlet />
             {children}

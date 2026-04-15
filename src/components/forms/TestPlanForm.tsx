@@ -276,7 +276,7 @@ export const TestPlanForm = ({ onSuccess, onCancel, initialData }: TestPlanFormP
                 Cancelar
               </Button>
             )}
-            <StandardButton type="submit" disabled={loading} className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0">
+            <StandardButton type="submit" disabled={loading} variant="brand">
               {loading ? (initialData ? 'Atualizando...' : 'Criando...') : (initialData ? 'Atualizar' : 'Criar')} Plano
             </StandardButton>
           </div>

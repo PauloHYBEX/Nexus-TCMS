@@ -3,6 +3,7 @@ import { Sparkles, Files, FileText, TestTube, PlayCircle, Eye, Info, User, Layer
 import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 import { AIBatchGeneratorForm } from '@/components/forms/AIBatchGeneratorForm';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useProject } from '@/contexts/ProjectContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -61,13 +62,15 @@ export const AIGenerator = () => {
   // Layout simplificado: geração individual ou em lote controlado pelos ícones do cabeçalho
   const [searchParams, setSearchParams] = useSearchParams();
   const { hasPermission, loading } = usePermissions();
+  const { currentProject } = useProject();
+  const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
-  const canGeneratePlan = hasPermission('can_use_ai') && hasPermission('can_manage_plans');
-  const canGenerateCase = hasPermission('can_use_ai') && hasPermission('can_manage_cases');
-  const canGenerateExecution = hasPermission('can_use_ai') && hasPermission('can_manage_executions');
-  const planDisabled = loading || !canGeneratePlan;
-  const caseDisabled = loading || !canGenerateCase;
-  const executionDisabled = loading || !canGenerateExecution;
+  const canGeneratePlan = hasPermission('can_use_ai') && hasPermission('can_manage_plans') && !isProjectInactive;
+  const canGenerateCase = hasPermission('can_use_ai') && hasPermission('can_manage_cases') && !isProjectInactive;
+  const canGenerateExecution = hasPermission('can_use_ai') && hasPermission('can_manage_executions') && !isProjectInactive;
+  const planDisabled = loading || isProjectInactive || !canGeneratePlan;
+  const caseDisabled = loading || isProjectInactive || !canGenerateCase;
+  const executionDisabled = loading || isProjectInactive || !canGenerateExecution;
 
   // Sincroniza o estado com o query param ?type=
   useEffect(() => {
@@ -78,15 +81,23 @@ export const AIGenerator = () => {
     }
   }, [searchParams]);
 
-  const handleGenerationSuccess = (data: any) => {
+  type BatchPayload = { plans?: Partial<GeneratedItem>[]; cases?: Partial<GeneratedItem>[] };
+  const isBatchPayload = (v: unknown): v is BatchPayload => {
+    if (typeof v !== 'object' || v === null) return false;
+    const obj = v as Record<string, unknown>;
+    return Array.isArray(obj.plans) || Array.isArray(obj.cases);
+  };
+
+  const handleGenerationSuccess = (data: unknown) => {
     setShowForm(false);
     if (batchMode === 'batch' && (generationType === 'plan' || generationType === 'case')) {
       // Para geração em lote, abrir o modal de revisão
-      if (data.plans || data.cases) {
-        const itemsWithStatus = (data.plans || data.cases).map((item: any) => ({
-          ...item,
-          id: item.id || Math.random().toString(36).substr(2, 9),
-          status: 'pending' as const
+      if (isBatchPayload(data)) {
+        const source = (data.plans || data.cases) as Partial<GeneratedItem>[];
+        const itemsWithStatus: GeneratedItem[] = source.map((item) => ({
+          ...(item as GeneratedItem),
+          id: (item.id as string) || Math.random().toString(36).slice(2, 11),
+          status: 'pending'
         }));
         setGeneratedPlans(itemsWithStatus);
         setShowBatchModal(true);
@@ -166,7 +177,7 @@ export const AIGenerator = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={batchMode === 'individual' ? 'secondary' : 'ghost'}
+                  variant={batchMode === 'individual' ? 'brand' : 'ghost'}
                   size="icon"
                   aria-label="Modo individual"
                   aria-pressed={batchMode === 'individual'}
@@ -182,7 +193,7 @@ export const AIGenerator = () => {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
-                  variant={batchMode === 'batch' ? 'secondary' : 'ghost'}
+                  variant={batchMode === 'batch' ? 'brand' : 'ghost'}
                   size="icon"
                   aria-label="Modo em lote"
                   aria-pressed={batchMode === 'batch'}
@@ -267,7 +278,7 @@ export const AIGenerator = () => {
 
               {/* Casos */}
               <div
-                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                className={`relative grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors ${caseDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
                 role="button"
                 tabIndex={caseDisabled ? -1 : 0}
                 aria-disabled={caseDisabled}
@@ -301,11 +312,13 @@ export const AIGenerator = () => {
                     {batchMode === 'batch' ? 'Gerar Vários Casos' : 'Gerar Casos de Teste'}
                   </div>
                 </div>
+                {/* Placeholder para manter a centralização igual à primeira linha */}
+                <div className="h-9 w-9 opacity-0 pointer-events-none" aria-hidden />
               </div>
 
               {/* Execução */}
               <div
-                className={`relative grid grid-cols-[auto_1fr] items-center gap-4 p-5 transition-colors ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
+                className={`relative grid grid-cols-[auto_1fr_auto] items-center gap-4 p-5 transition-colors ${executionDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/40'}`}
                 role="button"
                 tabIndex={executionDisabled ? -1 : 0}
                 aria-disabled={executionDisabled}
@@ -335,6 +348,8 @@ export const AIGenerator = () => {
                     Gerar Execução de Teste
                   </div>
                 </div>
+                {/* Placeholder para manter a centralização igual à primeira linha */}
+                <div className="h-9 w-9 opacity-0 pointer-events-none" aria-hidden />
               </div>
             </div>
           </Card>
@@ -342,7 +357,7 @@ export const AIGenerator = () => {
       )}
       {/* Modal de Criação (Formulários) */}
       <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) setSearchParams({}); }}>
-        <DialogContent className="max-w-4xl" aria-describedby="ai-create-desc">
+        <DialogContent className="max-w-3xl" aria-describedby="ai-create-desc">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {generationType === 'plan' ? <FileText className="h-5 w-5" /> : generationType === 'case' ? <TestTube className="h-5 w-5" /> : <PlayCircle className="h-5 w-5" />}
@@ -354,13 +369,11 @@ export const AIGenerator = () => {
               Criar artefatos de teste com IA
             </DialogDescription>
           </DialogHeader>
-          <div className="pt-2">
             {(batchMode === 'batch' && (generationType === 'plan' || generationType === 'case')) ? (
               <AIBatchGeneratorForm onSuccess={handleGenerationSuccess} type={generationType} />
             ) : (
               <AIGeneratorForm onSuccess={handleGenerationSuccess} initialType={generationType} />
             )}
-          </div>
         </DialogContent>
       </Dialog>
       <AIBatchModal
@@ -385,7 +398,6 @@ export const AIGenerator = () => {
               Cole a tabela/descrição. A IA consolidará um plano e gerará vários casos de teste.
             </DialogDescription>
           </DialogHeader>
-          <div className="pt-2">
             <AIBatchGeneratorForm
               type="plan"
               mode="plan-with-cases"
@@ -394,7 +406,6 @@ export const AIGenerator = () => {
                 navigate('/plans');
               }}
             />
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -489,7 +500,7 @@ export const AIGenerator = () => {
                     <div>
                       <h4 className="font-medium mb-2">Passos do Teste</h4>
                       <div className="space-y-2">
-                        {selectedPlan.steps.map((step: any, index: number) => (
+                        {selectedPlan.steps.map((step, index) => (
                           <div key={index} className="border rounded-lg p-3">
                             <div className="font-medium text-sm">Passo {index + 1}</div>
                             <div className="text-sm mt-1">

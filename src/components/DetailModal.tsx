@@ -3,11 +3,19 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye } from 'lucide-react';
+import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2 } from 'lucide-react';
 import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types';
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+
+const userRoleLabel: Record<string, string> = {
+  master: 'Master',
+  admin: 'Administrador',
+  manager: 'Gerência',
+  tester: 'Testador',
+  viewer: 'Visualizador',
+};
 import * as ModelControlService from '@/services/modelControlService';
 import {
   AlertDialog,
@@ -22,11 +30,15 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
+import {
   priorityLabel,
   priorityBadgeClass,
   executionStatusLabel,
   executionStatusBadgeClass,
+  requirementStatusLabel,
+  requirementStatusBadgeClass,
+  defectStatusLabel,
+  defectStatusBadgeClass,
   testCaseTypeLabel,
   testCaseTypeBadgeClass,
 } from '@/lib/labels';
@@ -50,10 +62,11 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [showGenerateDialog, setShowGenerateDialog] = useState(false);
   const [additionalContext, setAdditionalContext] = useState('');
   const [selectedModelId, setSelectedModelId] = useState<string>('default');
-  const [author, setAuthor] = useState<{ id: string; email?: string; display_name?: string; avatar_url?: string; github_url?: string; google_url?: string; website_url?: string; tags?: any[] } | null>(null);
+  const [author, setAuthor] = useState<{ id: string; email?: string; display_name?: string; avatar_url?: string; github_url?: string; google_url?: string; website_url?: string; tags?: any[]; role?: string } | null>(null);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
-  const [authorRoles, setAuthorRoles] = useState<Array<{ role: 'desenvolvimento' | 'suporte' | 'gerencia' | 'supervisao' | 'visualizador'; icon?: string }>>([]);
   const [authorTags, setAuthorTags] = useState<Array<{ label: string; icon?: string }>>([]);
+  const [linkedPlan, setLinkedPlan] = useState<{ id: string; sequence?: number | null; title?: string } | null>(null);
+  const [linkedCase, setLinkedCase] = useState<{ id: string; sequence?: number | null; title?: string } | null>(null);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
@@ -61,8 +74,25 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   useEffect(() => {
     if (!isOpen) {
       setConfirmDelete(false);
+      setLinkedPlan(null);
+      setLinkedCase(null);
     }
   }, [isOpen]);
+
+  // Fetch linked plan/case for vínculos section
+  useEffect(() => {
+    if (!isOpen || !item) return;
+    const planId = (item as any).plan_id as string | undefined;
+    const caseId = (item as any).case_id as string | undefined;
+    if (planId) {
+      supabase.from('test_plans').select('id, sequence, title').eq('id', planId).maybeSingle()
+        .then(({ data }) => { if (data) setLinkedPlan(data as any); });
+    }
+    if (caseId) {
+      supabase.from('test_cases').select('id, sequence, title').eq('id', caseId).maybeSingle()
+        .then(({ data }) => { if (data) setLinkedCase(data as any); });
+    }
+  }, [isOpen, item]);
 
   useEffect(() => {
     setConfirmDelete(false);
@@ -77,6 +107,21 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       minute: '2-digit'
     }).format(new Date(date));
   };
+
+  // Classes para status de Plano/Caso (reuso do padrão aplicado em TestPlans)
+  const planStatusClasses = (status: string) => (
+    status === 'active'
+      ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-400/15 dark:text-green-300 dark:border-transparent dark:ring-1 dark:ring-green-400/25'
+      : status === 'review'
+      ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-400/15 dark:text-yellow-300 dark:border-transparent dark:ring-1 dark:ring-yellow-400/25'
+      : status === 'approved'
+      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-400/15 dark:text-blue-300 dark:border-transparent dark:ring-1 dark:ring-blue-400/25'
+      : status === 'archived'
+      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-400/15 dark:text-red-300 dark:border-transparent dark:ring-1 dark:ring-red-400/25'
+      : status === 'draft'
+      ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
+      : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
+  );
 
   // Abre o modal de confirmação de geração
   const openGenerateDialog = () => {
@@ -142,36 +187,18 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       if (!isOpen || !item || !('user_id' in (item as any))) return;
       const uid = (item as any).user_id as string;
       try {
-        // Buscar roles/cargos do autor (sempre que possível)
+        // Always try profiles table first (works regardless of SINGLE_TENANT)
         try {
-          const { data: rolesRows } = await supabase
-            .from('profile_function_roles' as any)
-            .select('role, icon')
-            .eq('user_id', uid);
-          if (Array.isArray(rolesRows)) {
-            setAuthorRoles(rolesRows as any);
-          } else {
-            setAuthorRoles([]);
-          }
-        } catch {
-          setAuthorRoles([]);
-        }
-        if (!SINGLE_TENANT) {
-          let data: any | null = null;
-          let error: any | null = null;
-          try {
-            const res = await supabase
-              .from('profiles' as any)
-              .select('id, email, display_name, avatar_url, github_url, google_url, website_url, tags')
-              .eq('id', uid)
-              .maybeSingle();
-            data = res.data; error = res.error;
-          } catch (e) {
-            error = e;
-          }
+          const res = await supabase
+            .from('profiles' as any)
+            .select('id, email, display_name, avatar_url, github_url, google_url, website_url, tags, role')
+            .eq('id', uid)
+            .maybeSingle();
+          const data = res.data; const error = res.error;
           if (data && !error) {
+            const effectiveRole = (data as any).role || (SINGLE_TENANT ? 'master' : undefined);
             setAuthor({
-              id: data.id,
+              id: (data as any).id,
               email: (data as any).email,
               display_name: (data as any).display_name,
               avatar_url: (data as any).avatar_url,
@@ -179,24 +206,24 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
               google_url: (data as any).google_url,
               website_url: (data as any).website_url,
               tags: (data as any).tags || [],
+              role: effectiveRole,
             });
-            if (Array.isArray((data as any).tags)) setAuthorTags((data as any).tags);
+            if (Array.isArray((data as any).tags) && (data as any).tags.length > 0) {
+              setAuthorTags((data as any).tags);
+            } else {
+              // Fallback: user_metadata.tags (SINGLE_TENANT mode stores tags there)
+              try {
+                const { data: authData } = await supabase.auth.getUser();
+                if (authData?.user?.id === uid) {
+                  const mt = (authData.user.user_metadata as any)?.tags;
+                  if (Array.isArray(mt)) setAuthorTags(mt);
+                }
+              } catch {}
+            }
             return;
           }
-          // Fallback para colunas básicas caso algumas não existam ainda
-          try {
-            const resBasic = await supabase
-              .from('profiles' as any)
-              .select('id, email, display_name, tags')
-              .eq('id', uid)
-              .maybeSingle();
-            if (resBasic.data && !resBasic.error) {
-              setAuthor({ id: resBasic.data.id, email: resBasic.data.email, display_name: resBasic.data.display_name, tags: (resBasic.data as any).tags || [] });
-              const t = (resBasic.data as any).tags; if (Array.isArray(t)) setAuthorTags(t);
-              return;
-            }
-          } catch {}
-        }
+        } catch {}
+        // Fallback: auth.getUser() (SINGLE_TENANT or when profile row is missing)
         const { data: authData } = await supabase.auth.getUser();
         const me = authData?.user;
         if (me && me.id === uid) {
@@ -209,6 +236,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             google_url: (me.user_metadata as any)?.google_url,
             website_url: (me.user_metadata as any)?.website_url,
             tags: (me.user_metadata as any)?.tags || [],
+            role: SINGLE_TENANT ? 'master' : (me.user_metadata as any)?.role,
           });
           const rawT = (me.user_metadata as any)?.tags; if (Array.isArray(rawT)) setAuthorTags(rawT);
         } else {
@@ -217,7 +245,6 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         }
       } catch {
         setAuthor({ id: uid });
-        setAuthorRoles([]);
         setAuthorTags([]);
       }
     };
@@ -518,58 +545,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
   return (<>
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto text-center">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 justify-center">
-            {getTypeLabel()} - {getItemTitle()}
-            {('generated_by_ai' in item && item.generated_by_ai) && (
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Sparkles className="h-3 w-3" />
-                IA
-              </Badge>
-            )}
-          </DialogTitle>
-          <DialogDescription>
-            Visualize os detalhes completos {type === 'plan' ? 'do plano de teste' : type === 'case' ? 'do caso de teste' : type === 'execution' ? 'da execução de teste' : type === 'requirement' ? 'do requisito' : 'do defeito'}
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogTitle className="sr-only">{getTypeLabel()} — {getItemTitle()}</DialogTitle>
 
-        <div className="space-y-6">
-          {/* Informações básicas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <Calendar className="h-4 w-4" />
-              {type === 'execution' ? 'Executado em:' : 'Criado em:'} {formatDate(getItemDate())}
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 justify-center md:justify-start flex-wrap">
-              <User className="h-4 w-4" />
-              <span>Autor:</span>
-              <button type="button" className="text-brand hover:underline focus:outline-none bg-transparent border-0 p-0 h-auto" onClick={() => setShowAuthorModal(true)} title="Abrir perfil">
-                {author?.display_name || author?.email || 'ver perfil'}
-              </button>
-              {authorRoles.length > 0 && (
-                <span className="flex items-center gap-1 flex-wrap">
-                  {authorRoles.map((r, idx) => {
-                    const IconC = r.role === 'desenvolvimento' ? Code : r.role === 'suporte' ? LifeBuoy : r.role === 'gerencia' ? Briefcase : r.role === 'supervisao' ? Shield : Eye;
-                    const label = r.role.charAt(0).toUpperCase() + r.role.slice(1);
-                    return (
-                      <span key={idx} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-muted text-muted-foreground border">
-                        <IconC className="h-3.5 w-3.5" /> {label}
-                      </span>
-                    );
-                  })}
-                </span>
-              )}
-            </div>
+        {/* ── Header ── */}
+        <div className="mb-4">
+          <div className="flex items-start gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-foreground leading-snug flex-1 min-w-0">
+              {getTypeLabel()} — {getItemTitle()}
+            </h2>
           </div>
-
-          {/* Removido: exibição duplicada de roles/tags. Mantemos apenas as tags de cargo ao lado do nome do autor. */}
-
-          {/* Badges de status e prioridade */}
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap mt-2">
             {('status' in item && item.status) && (
-              <Badge className={type === 'execution' ? executionStatusBadgeClass(item.status as ExecutionStatus) : 'bg-blue-100 text-blue-800'}>
-                {type === 'execution' ? executionStatusLabel(item.status as ExecutionStatus) : translateStatus(item.status as string)}
+              <Badge className={
+                type === 'execution' ? executionStatusBadgeClass(item.status as ExecutionStatus)
+                : type === 'requirement' ? requirementStatusBadgeClass(item.status as any)
+                : type === 'defect' ? defectStatusBadgeClass(item.status as any)
+                : planStatusClasses(item.status as string)
+              }>
+                {type === 'execution' ? executionStatusLabel(item.status as ExecutionStatus)
+                : type === 'requirement' ? requirementStatusLabel(item.status as any)
+                : type === 'defect' ? defectStatusLabel(item.status as any)
+                : translateStatus(item.status as string)}
               </Badge>
             )}
             {('priority' in item && (item as any).priority) && (
@@ -587,54 +584,78 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                 {priorityLabel((item as any).severity)}
               </Badge>
             )}
+            {('generated_by_ai' in item && Boolean(item.generated_by_ai)) && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Sparkles className="h-3 w-3" />
+                IA
+              </Badge>
+            )}
           </div>
+          <div className="flex items-center gap-5 text-sm text-muted-foreground mt-2.5 flex-wrap">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 shrink-0" />
+              {type === 'execution' ? 'Executado em:' : 'Criado em:'}{' '}
+              {formatDate(getItemDate())}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <User className="h-3.5 w-3.5 shrink-0" />
+              Autor:{' '}
+              <button
+                type="button"
+                className="text-brand hover:underline font-medium ml-0.5 focus:outline-none bg-transparent border-0 p-0"
+                onClick={() => setShowAuthorModal(true)}
+              >
+                {author?.display_name || author?.email || 'ver perfil'}
+              </button>
+              {author?.role && (
+                <span className="ml-0.5">({userRoleLabel[author.role] || author.role})</span>
+              )}
+            </span>
+          </div>
+        </div>
+
+        <hr className="border-border" />
+
+        <div className="py-5 space-y-5">
 
           {/* Descrição */}
           {desc && (
             <div>
-              <h3 className={`font-medium mb-2 ${isShortDesc ? 'text-center' : ''}`}>
-                Descrição
-              </h3>
-              {isShortDesc ? (
-                <p className="text-sm text-gray-600 dark:text-gray-400 text-center">{desc}</p>
-              ) : (
-                renderListOrParagraph(desc)
-              )}
+              <h3 className="text-sm font-semibold text-foreground mb-1.5">Descrição</h3>
+              {renderListOrParagraph(desc)}
             </div>
           )}
 
-          {/* Conteúdo específico por tipo */}
           {type === 'plan' && (() => {
             const obj = (item as any).objective?.toString().trim();
             const scope = (item as any).scope?.toString().trim();
             const approach = (item as any).approach?.toString().trim();
             const criteria = (item as any).criteria?.toString().trim();
-            const hasAny = Boolean(obj || scope || approach || criteria);
-            if (!hasAny) return null;
+            if (!obj && !scope && !approach && !criteria) return null;
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {obj && (
                   <div>
-                    <h3 className="font-medium mb-2">Objetivo</h3>
-                    {renderListOrParagraph(obj, { centerShort: true })}
+                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Objetivo</h3>
+                    {renderListOrParagraph(obj)}
                   </div>
                 )}
                 {scope && (
                   <div>
-                    <h3 className="font-medium mb-2">Escopo</h3>
-                    {renderListOrParagraph(scope, { centerShort: true })}
+                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Escopo</h3>
+                    {renderListOrParagraph(scope)}
                   </div>
                 )}
                 {approach && (
                   <div>
-                    <h3 className="font-medium mb-2">Abordagem</h3>
-                    {renderListOrParagraph(approach, { centerShort: true })}
+                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Abordagem</h3>
+                    {renderListOrParagraph(approach)}
                   </div>
                 )}
                 {criteria && (
                   <div>
-                    <h3 className="font-medium mb-2">Critérios</h3>
-                    {renderListOrParagraph(criteria, { centerShort: true })}
+                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Critérios</h3>
+                    {renderListOrParagraph(criteria)}
                   </div>
                 )}
               </div>
@@ -645,32 +666,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             <div className="space-y-4">
               {item.preconditions && (
                 <div>
-                  <h3 className="font-medium mb-2">Pré-condições</h3>
-                  {renderListOrParagraph(item.preconditions, { centerShort: true })}
+                  <h3 className="text-sm font-semibold text-foreground mb-1.5">Pré-condições</h3>
+                  {renderListOrParagraph(item.preconditions)}
                 </div>
               )}
-              
               <div>
-                <h3 className="font-medium mb-2">Passos</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Passos</h3>
                 <div className="space-y-2">
                   {item.steps?.map((step: any, index: number) => (
-                    <div key={index} className="border rounded-lg p-3">
-                      <div className="font-medium text-sm">Passo {step.order || index + 1}</div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Ação:</strong> {step.action}
+                    <div key={index} className="rounded-lg border border-border bg-muted/30 p-3">
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                        Passo {step.order || index + 1}
                       </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        <strong>Resultado esperado:</strong> {step.expected_result}
-                      </div>
+                      <div className="text-sm"><span className="font-medium">Ação: </span><span className="text-muted-foreground">{step.action}</span></div>
+                      <div className="text-sm mt-0.5"><span className="font-medium">Resultado esperado: </span><span className="text-muted-foreground">{step.expected_result}</span></div>
                     </div>
                   ))}
                 </div>
               </div>
-
               {item.expected_result && (
                 <div>
-                  <h3 className="font-medium mb-2">Resultado Final Esperado</h3>
-                  {renderListOrParagraph(item.expected_result, { centerShort: true })}
+                  <h3 className="text-sm font-semibold text-foreground mb-1.5">Resultado Final Esperado</h3>
+                  {renderListOrParagraph(item.expected_result)}
                 </div>
               )}
             </div>
@@ -680,83 +697,85 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             <div className="space-y-4">
               {item.actual_result && (
                 <div>
-                  <h3 className="font-medium mb-2">Resultado Obtido</h3>
-                  {renderListOrParagraph(item.actual_result, { centerShort: true })}
+                  <h3 className="text-sm font-semibold text-foreground mb-1.5">Resultado Obtido</h3>
+                  {renderListOrParagraph(item.actual_result)}
                 </div>
               )}
-
               {item.executed_by && (
                 <div>
-                  <h3 className="font-medium mb-2">Executado por</h3>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm">{item.executed_by}</p>
+                  <h3 className="text-sm font-semibold text-foreground mb-1.5">Executado por</h3>
+                  <p className="text-sm text-muted-foreground">{item.executed_by}</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Vínculos section */}
-          {(type === 'case' || type === 'execution') && (
+          {/* Vínculos */}
+          {(type === 'case' || type === 'execution') &&
+            (('plan_id' in item && (item as any).plan_id) ||
+            (type === 'execution' && 'case_id' in item && (item as any).case_id)) && (
             <div>
-              <h3 className="font-medium mb-2">Vínculos</h3>
-              <div className="space-y-2">
-                {'plan_id' in item && item.plan_id && (
-                  <div className="text-sm">
-                    <span className="font-medium">Plano de Teste:</span>{' '}
-                    <Link to={`/plans?id=${item.plan_id}`} className="text-blue-600 hover:underline dark:text-blue-400" onClick={handleClose}>
-                      {item.plan_id}
+              <h3 className="text-sm font-semibold text-foreground mb-2">Vínculos</h3>
+              <div className="space-y-1.5">
+                {'plan_id' in item && (item as any).plan_id && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <ClipboardList className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium text-foreground">Plano de Teste:</span>{' '}
+                    <Link to={`/plans?id=${(item as any).plan_id}`} className="text-brand hover:underline" onClick={handleClose}>
+                      {linkedPlan
+                        ? (linkedPlan.sequence != null ? `PT-${String(linkedPlan.sequence).padStart(3, '0')} — ${linkedPlan.title || ''}` : linkedPlan.title || (item as any).plan_id)
+                        : (item as any).plan_id}
                     </Link>
                   </div>
                 )}
-                {type === 'execution' && 'case_id' in item && item.case_id && (
-                  <div className="text-sm">
-                    <span className="font-medium">Caso de Teste:</span>{' '}
-                    <Link to={`/cases?id=${item.case_id}`} className="text-blue-600 hover:underline dark:text-blue-400" onClick={handleClose}>
-                      {item.case_id}
+                {type === 'execution' && 'case_id' in item && (item as any).case_id && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium text-foreground">Caso de Teste:</span>{' '}
+                    <Link to={`/cases?id=${(item as any).case_id}`} className="text-brand hover:underline" onClick={handleClose}>
+                      {linkedCase
+                        ? (linkedCase.sequence != null ? `CT-${String(linkedCase.sequence).padStart(3, '0')} — ${linkedCase.title || ''}` : linkedCase.title || (item as any).case_id)
+                        : (item as any).case_id}
                     </Link>
                   </div>
                 )}
               </div>
             </div>
           )}
+        </div>
 
-          {/* Botões de ação */}
-          <div className="flex justify-between pt-4 border-t">
-            <ExportDropdown item={item} type={type} />
-            
-            <div className="flex gap-2">
-              {type === 'plan' && ('generated_by_ai' in item && item.generated_by_ai) && (
-                <Button onClick={openGenerateDialog} disabled={generating}>
-                  {generating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Gerando...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4 mr-1" />
-                      Gerar Casos
-                    </>
-                  )}
-                </Button>
-              )}
-              {onEdit && (
-                <Button variant="outline" onClick={() => onEdit(item)} disabled={isProjectInactive} title={isProjectInactive ? 'Projeto não ativo — edição desabilitada' : undefined}>
-                  <Edit className="h-4 w-4 mr-1" />
-                  Editar
-                </Button>
-              )}
-              {onDelete && (
-                <Button 
-                  variant={confirmDelete ? "destructive" : "outline"}
-                  onClick={handleDelete}
-                  disabled={isProjectInactive}
-                  title={isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined}
-                >
-                  <Trash2 className="h-4 w-4 mr-1" />
-                  {confirmDelete ? 'Confirmar Exclusão' : 'Excluir'}
-                </Button>
-              )}
-            </div>
+        <hr className="border-border" />
+
+        {/* ── Footer ── */}
+        <div className="flex items-center justify-between pt-4">
+          <ExportDropdown item={item} type={type} />
+          <div className="flex gap-2">
+            {type === 'plan' && ('generated_by_ai' in item && Boolean(item.generated_by_ai)) && (
+              <Button onClick={openGenerateDialog} disabled={generating || isProjectInactive} title={isProjectInactive ? 'Projeto não ativo — geração desabilitada' : undefined}>
+                {generating ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Gerando...</>
+                ) : (
+                  <><Sparkles className="h-4 w-4 mr-1" />Gerar Casos</>
+                )}
+              </Button>
+            )}
+            {onEdit && (
+              <Button variant="outline" onClick={() => onEdit(item)} disabled={isProjectInactive} title={isProjectInactive ? 'Projeto não ativo — edição desabilitada' : undefined}>
+                <Edit className="h-4 w-4 mr-1" />
+                Editar
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant={confirmDelete ? "destructive" : "outline"}
+                onClick={handleDelete}
+                disabled={isProjectInactive}
+                title={isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                {confirmDelete ? 'Confirmar Exclusão' : 'Excluir'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

@@ -3,10 +3,12 @@ import { useState, useEffect } from 'react';
 
 interface DashboardSettings {
   quickActionType: 'plan' | 'case' | 'execution';
+  applyProjectThemeEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: DashboardSettings = {
-  quickActionType: 'plan'
+  quickActionType: 'plan',
+  applyProjectThemeEnabled: false,
 };
 
 export const useDashboardSettings = () => {

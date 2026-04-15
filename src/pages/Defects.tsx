@@ -21,12 +21,10 @@ import { StandardButton } from '@/components/StandardButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, Bug as BugIcon, Search } from 'lucide-react';
-import { 
-  severityLabel, 
-  severityBadgeClass, 
-  defectStatusLabel, 
-  defectStatusBadgeClass 
-} from '@/lib/labels';
+import { severityLabel, severityBadgeClass, defectStatusBadgeClass, defectStatusLabel } from '@/lib/labels';
+import { PriorityTag } from '@/components/ui/PriorityTag';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import SearchableCombobox from '@/components/SearchableCombobox';
 import { Input } from '@/components/ui/input';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
@@ -66,11 +64,24 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const [status, setStatus] = useState<Defect['status']>('open');
   const [caseId, setCaseId] = useState<string>('');
   const [executionId, setExecutionId] = useState<string>('');
+  const BASE_PATH = '/defects';
+  
+  // Constrói um conjunto seguro de query params permitido pela tela
+  const buildSafeSearchParams = (sourceSearch: string) => {
+    const source = new URLSearchParams(sourceSearch);
+    const params = new URLSearchParams();
+    const allowedKeys = ['id', 'modal', 'openCreate', 'cases'];
+    for (const key of allowedKeys) {
+      const value = source.get(key);
+      if (value !== null) params.set(key, value);
+    }
+    return params;
+  };
   const clearCaseFilter = () => {
     setFilterCaseIds([]);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.delete('cases');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
   };
 
   useEffect(() => {
@@ -104,7 +115,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
 
   // Deep-link: abrir modal ao detectar ?id=
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     const id = params.get('id');
     const modal = params.get('modal');
     const openCreateFlag = params.get('openCreate');
@@ -126,24 +137,24 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
       openCreate();
       // limpar flag após abrir para evitar reabertura
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, defects]);
 
   const clearIdParam = () => {
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     if (params.has('id')) {
       params.delete('id');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('modal')) {
       params.delete('modal');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('openCreate')) {
       params.delete('openCreate');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
   };
 
@@ -212,10 +223,10 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     setCaseId(d.case_id || '');
     setExecutionId(d.execution_id || '');
     setShowForm(true);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
     params.set('modal', 'defect:edit');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
     // carregar execuções do caso (se houver)
     if (d.case_id && user) {
       getTestExecutions(user.id, undefined, d.case_id).then(execList => setCaseExecutions(execList)).catch(() => setCaseExecutions([]));
@@ -227,10 +238,10 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const handleViewDetails = (d: Defect) => {
     setSelectedDefect(d);
     setShowDetailModal(true);
-    const params = new URLSearchParams(location.search);
+    const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
     params.set('modal', 'defect:view');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: false });
+    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
   };
 
   const submit = async () => {
@@ -327,28 +338,27 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
         </div>
       )}
 
-      {/* Toolbar comum */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Buscar por ID ou Título"
-            className="pl-9"
+            className="pl-9 h-9 bg-muted/20 border-border/60"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1 shrink-0">
           {filterCaseIds.length > 0 && (
-            <div className="flex items-center gap-2 border rounded px-2 py-1 text-xs text-muted-foreground">
-              <span>{filterCaseIds.length} caso(s) filtrado(s)</span>
-              <Button variant="outline" size="sm" onClick={clearCaseFilter} className="h-7 px-2 text-xs">Limpar</Button>
+            <div className="flex items-center gap-2 border border-border/60 rounded-md px-2.5 py-1 text-xs text-muted-foreground h-9">
+              <span>{filterCaseIds.length} caso(s)</span>
+              <Button variant="ghost" size="sm" onClick={clearCaseFilter} className="h-5 px-1.5 text-xs">Limpar</Button>
             </div>
           )}
           {!embedded && (
             <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
           )}
-          {/* Quando embedded, o botão '+ Novo' fica no cabeçalho de Gestão. */}
         </div>
       </div>
 
@@ -443,30 +453,28 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
               {filtered.map(d => (
                 <Card
                   key={d.id}
-                  className="h-full flex flex-col border border-border/50 overflow-hidden cursor-pointer card-hover"
+                  className="flex flex-col border border-border/50 cursor-pointer card-hover"
                   onClick={() => handleViewDetails(d)}
                 >
                   <CardHeader className="p-4 pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">
-                          {`DEF-${(d.id || '').slice(0,4)}`}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded flex-shrink-0 mt-0.5">
+                          {d.sequence ? `DEF-${String(d.sequence).padStart(3, '0')}` : `DEF-${(d.id || '').slice(0, 4)}`}
                         </span>
-                        <CardTitle className="text-base line-clamp-2 leading-tight min-w-0">{d.title}</CardTitle>
+                        <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug min-w-0">{d.title}</CardTitle>
                       </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <StatusDot status={d.status} label={defectStatusLabel(d.status)} />
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4 pt-0 flex flex-col h-full">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex gap-2">
-                        <Badge className={severityBadgeClass(d.severity)}>{severityLabel(d.severity)}</Badge>
-                        <Badge className={defectStatusBadgeClass(d.status)}>{defectStatusLabel(d.status)}</Badge>
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{d.description}</p>
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{d.description}</p>
                     <div className="mt-auto flex items-center justify-between">
-                      <div className="text-xs text-muted-foreground">#{d.id.slice(0, 8)}</div>
-                      <div className="flex gap-1">
+                      <PriorityTag priority={d.severity} />
+                      <div className="flex items-center gap-2">
+                        <UserAvatar userId={d.user_id} />
                         {hasPermission('can_manage_executions') && (
                           <StandardButton 
                             variant="ghost" 
@@ -504,59 +512,56 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
           ) : (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[80px_1fr_120px_120px_100px] items-center gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                <div className="pt-px">ID</div>
-                <div className="text-center pt-px">Título</div>
-                <div className="text-center pt-px">Severidade</div>
-                <div className="text-center pt-px">Status</div>
+              <div className="grid grid-cols-[80px_4fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div>ID</div>
+                <div>Título</div>
+                <div>Status</div>
+                <div>Severidade</div>
+                <div className="text-center">Criado por</div>
+                <div>Criado em</div>
                 <div className="flex justify-end">Ações</div>
               </div>
               {/* Rows */}
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-border/60">
                 {filtered.map((d) => (
-                  <div 
+                  <div
                     key={d.id}
-                    className="grid grid-cols-[80px_1fr_120px_120px_100px] items-center gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                    className="grid grid-cols-[80px_4fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => handleViewDetails(d)}
                   >
                     {/* ID */}
-                    <div className="flex items-center">
-                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">{`DEF-${(d.id || '').slice(0,4)}`}</span>
+                    <div>
+                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
+                        {d.sequence ? `DEF-${String(d.sequence).padStart(3, '0')}` : `DEF-${(d.id || '').slice(0, 4)}`}
+                      </span>
                     </div>
-                    {/* Título */}
-                    <div className="text-sm font-medium leading-tight text-center flex items-center justify-center min-w-0">
-                      <span className="truncate">{d.title}</span>
+                    {/* Título + desc */}
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate leading-tight">{d.title}</div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">{d.description}</div>
                     </div>
-                    {/* Severidade */}
-                    <div className="flex items-center justify-center"><Badge className={severityBadgeClass(d.severity)}>{severityLabel(d.severity)}</Badge></div>
                     {/* Status */}
-                    <div className="flex items-center justify-center"><Badge className={defectStatusBadgeClass(d.status)}>{defectStatusLabel(d.status)}</Badge></div>
+                    <div><StatusDot status={d.status} label={defectStatusLabel(d.status)} /></div>
+                    {/* Severidade */}
+                    <div><PriorityTag priority={d.severity} /></div>
+                    {/* Avatar */}
+                    <div className="flex justify-center"><UserAvatar userId={d.user_id} /></div>
+                    {/* Data */}
+                    <div className="text-xs text-muted-foreground">
+                      {d.created_at ? new Date(d.created_at).toLocaleDateString('pt-BR') : '—'}
+                    </div>
                     {/* Ações */}
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-0.5">
                       {hasPermission('can_manage_executions') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => { e.stopPropagation(); openEdit(d); }}
-                          className="h-8 w-8 p-0"
-                          title="Editar"
-                          aria-label="Editar"
-                          disabled={!currentProject || isProjectInactive}
-                        >
-                          <Pencil className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(d); }}
+                          className="h-8 w-8 p-0" title="Editar" aria-label="Editar" disabled={!currentProject || isProjectInactive}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
                       )}
                       {hasPermission('can_manage_executions') && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => { e.stopPropagation(); remove(d.id); }}
-                          className="h-8 w-8 p-0"
-                          title="Excluir"
-                          aria-label="Excluir"
-                          disabled={!currentProject || isProjectInactive}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); remove(d.id); }}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive" title="Excluir" aria-label="Excluir" disabled={!currentProject || isProjectInactive}>
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>

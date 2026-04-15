@@ -69,14 +69,14 @@ export const Gestao = () => {
     <div className="flex-1 space-y-6 p-6">
       {/* Header padrão como outras páginas */}
       <div className="flex items-center justify-between">
-        <div className="pl-24">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">Gestão</h1>
           <p className="text-sm text-muted-foreground">Organize requisitos, vínculos e defeitos</p>
         </div>
         {((tab === 'requirements' || tab === 'traceability') && hasPermission('can_manage_cases')) || (tab === 'defects' && hasPermission('can_manage_executions')) ? (
           <StandardButton
+            variant="brand"
             onClick={handleCreate}
-            className="bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0"
             disabled={!currentProject || isProjectInactive}
             title={!currentProject ? 'Selecione um projeto ativo para criar' : (isProjectInactive ? 'Projeto não ativo — criação desabilitada' : undefined)}
           >

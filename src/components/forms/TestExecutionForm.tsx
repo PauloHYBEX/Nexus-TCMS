@@ -68,8 +68,8 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
   // Hydrate draft from localStorage
   useEffect(() => {
     // Cleanup drafts legados (sem escopo) para evitar preencher com dados antigos
-    try { localStorage.removeItem('draft:testexec:new'); } catch {}
-    try { if (execution?.id) localStorage.removeItem(`draft:testexec:edit:${execution.id}`); } catch {}
+    try { localStorage.removeItem('draft:testexec:new'); } catch (_e) { void _e; }
+    try { if (execution?.id) localStorage.removeItem(`draft:testexec:edit:${execution.id}`); } catch (_e) { void _e; }
 
     try {
       const raw = localStorage.getItem(storageKey);
@@ -349,7 +349,7 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
             <Button
               type="submit"
               disabled={loading || !formData.case_id || !formData.plan_id}
-              className={isEdit ? 'bg-brand hover:bg-brand/90 text-white' : 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0'}
+              variant="brand"
             >
               {loading ? (isEdit ? 'Salvando...' : 'Registrando...') : (isEdit ? 'Salvar Alterações' : 'Registrar Execução')}
             </Button>

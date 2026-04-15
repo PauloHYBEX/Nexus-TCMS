@@ -1,6 +1,6 @@
-import { Grid, List } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { LayoutGrid, LayoutList } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface ViewModeToggleProps {
   viewMode: 'cards' | 'list';
@@ -10,37 +10,39 @@ interface ViewModeToggleProps {
 export const ViewModeToggle = ({ viewMode, onViewModeChange }: ViewModeToggleProps) => {
   return (
     <TooltipProvider>
-      <div className="flex rounded-lg border border-border overflow-hidden">
+      <div className="flex rounded-md border border-border/60 overflow-hidden">
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              size="sm"
+            <button
               onClick={() => onViewModeChange('cards')}
-              className={viewMode === 'cards' ? 'bg-brand text-brand-foreground' : ''}
+              className={cn(
+                'h-9 w-9 flex items-center justify-center transition-colors',
+                viewMode === 'cards'
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+              )}
             >
-              <Grid className="h-4 w-4" />
-            </Button>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </button>
           </TooltipTrigger>
-          <TooltipContent>
-            <p>Visualização em Cards</p>
-          </TooltipContent>
+          <TooltipContent><p>Cards</p></TooltipContent>
         </Tooltip>
-        
+
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
+            <button
               onClick={() => onViewModeChange('list')}
-              className={viewMode === 'list' ? 'bg-brand text-brand-foreground' : ''}
+              className={cn(
+                'h-9 w-9 flex items-center justify-center border-l border-border/60 transition-colors',
+                viewMode === 'list'
+                  ? 'bg-brand text-brand-foreground'
+                  : 'bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+              )}
             >
-              <List className="h-4 w-4" />
-            </Button>
+              <LayoutList className="h-3.5 w-3.5" />
+            </button>
           </TooltipTrigger>
-          <TooltipContent>
-            <p>Visualização em Lista</p>
-          </TooltipContent>
+          <TooltipContent><p>Lista</p></TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>

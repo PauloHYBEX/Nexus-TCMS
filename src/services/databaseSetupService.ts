@@ -93,7 +93,7 @@ export class DatabaseSetupService {
       // Verificar se pelo menos uma tabela existe e é acessível
       const hasAccessibleTable = checks.some(result => {
         if (result.status === 'fulfilled') {
-          const { error } = result.value;
+          const { error } = result.value as { error?: { code?: string } | null };
           // Se não há erro, ou se o erro é apenas "no rows", a tabela existe
           return !error || error.code === 'PGRST116';
         }
@@ -137,14 +137,8 @@ export class DatabaseSetupService {
 
   // Obter configuração atual do Supabase (para mostrar na aba Sobre)
   static getCurrentSupabaseConfig(): { url: string; isDemo: boolean } {
-    // Obter URL do ambiente ou usar valor padrão
-    const currentUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mhhzdykyjgrnprcyhlbz.supabase.co';
-    
-    // Verificar se é uma instância demo/exemplo
-    const isDemo = currentUrl.includes('demo') || 
-                   currentUrl.includes('example') || 
-                   currentUrl.includes('test') ||
-                   currentUrl === 'https://mhhzdykyjgrnprcyhlbz.supabase.co';
+    const currentUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+    const isDemo = false;
     
     return {
       url: currentUrl,
@@ -189,8 +183,7 @@ export class DatabaseSetupService {
     try {
       const status = await this.getDatabaseStatus('temp');
       if (!status.tablesExist) return null;
-      // Retorna apenas URL atual conhecida; chave não é acessível no cliente
-      const url = import.meta.env.VITE_SUPABASE_URL || '';
+      const url = import.meta.env.VITE_API_URL || '';
       return { supabaseUrl: url, supabaseKey: '', isConfigured: true };
 
     } catch (error) {
@@ -272,9 +265,12 @@ export class DatabaseSetupService {
         supabase.from('test_plans').select('id', { count: 'exact', head: true })
       ]);
 
+      const usersStats = usersCount as { count?: number | null };
+      const testsStats = testsCount as { count?: number | null };
+
       return {
-        totalUsers: usersCount.count || 0,
-        totalTests: testsCount.count || 0
+        totalUsers: usersStats.count || 0,
+        totalTests: testsStats.count || 0
       };
 
     } catch (error) {
