@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { useAuth } from './useAuth';
-import { DatabaseSetupService } from '@/services/databaseSetupService';
+import { supabase } from '@/integrations/supabase/client';
 
 export function useUserSupabase() {
   const { user } = useAuth();
-  const [userSupabase, setUserSupabase] = useState<SupabaseClient | null>(null);
+  const [userSupabase, setUserSupabase] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,16 +20,7 @@ export function useUserSupabase() {
         setLoading(true);
         setError(null);
 
-        // Obter configuração do banco de dados do usuário
-        const config = await DatabaseSetupService.getUserDatabaseConfig(user.id);
-        
-        if (config && config.isConfigured) {
-          // Criar cliente Supabase específico do usuário
-          const client = createClient(config.supabaseUrl, config.supabaseKey);
-          setUserSupabase(client);
-        } else {
-          setUserSupabase(null);
-        }
+        setUserSupabase(supabase);
       } catch (err) {
         console.error('Error loading user Supabase client:', err);
         setError('Erro ao carregar configuração de banco de dados');

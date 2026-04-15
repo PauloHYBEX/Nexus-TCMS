@@ -98,21 +98,31 @@ export const UserProfileModal: React.FC<{
       if (!isOpen || !userId) return;
       try {
         setLoading(true);
-        if (!SINGLE_TENANT) {
+        // Always try profiles table first (works regardless of SINGLE_TENANT)
+        try {
           const { data, error } = await supabase
             .from('profiles' as any)
             .select('id, display_name, email, avatar_url, github_url, google_url, website_url, role')
             .eq('id', userId)
             .maybeSingle();
           if (!error && data) {
-            setProfile(data as PublicProfile);
-            // Tags
+            const effectiveRole = (data as any).role || (SINGLE_TENANT ? 'master' : 'viewer');
+            setProfile({ ...(data as PublicProfile), role: effectiveRole });
+            // Tags — profiles.tags first, then user_metadata.tags (SINGLE_TENANT fallback)
             try {
               const resTags = await supabase.from('profiles' as any).select('tags').eq('id', userId).maybeSingle();
               const raw = (resTags.data as any)?.tags;
-              if (Array.isArray(raw)) setTags(raw as any);
+              if (Array.isArray(raw) && raw.length > 0) {
+                setTags(raw as any);
+              } else {
+                const { data: authData } = await supabase.auth.getUser();
+                if (authData?.user?.id === userId) {
+                  const metaTags = (authData.user.user_metadata as any)?.tags;
+                  if (Array.isArray(metaTags)) setTags(metaTags as any);
+                }
+              }
             } catch {}
-            // Roles
+            // Function roles
             try {
               const resRoles = await supabase
                 .from('profile_function_roles' as any)
@@ -123,8 +133,8 @@ export const UserProfileModal: React.FC<{
             } catch {}
             return;
           }
-        }
-        // Fallback: se for o usuário autenticado atual
+        } catch {}
+        // Fallback: auth.getUser() (covers SINGLE_TENANT when profiles table is empty)
         const { data: authData } = await supabase.auth.getUser();
         const me = authData?.user;
         if (me && me.id === userId) {
@@ -137,13 +147,14 @@ export const UserProfileModal: React.FC<{
             google_url: (me.user_metadata as any)?.google_url,
             website_url: (me.user_metadata as any)?.website_url,
             tags: (me.user_metadata as any)?.tags || [],
+            role: SINGLE_TENANT ? 'master' : (me.user_metadata as any)?.role,
           });
           const rawTags = (me.user_metadata as any)?.tags;
           if (Array.isArray(rawTags)) setTags(rawTags as any);
           return;
         }
-        // Se não houver dados, manter minimal
-        setProfile((prev) => prev ?? { id: userId } as PublicProfile);
+        // Minimal fallback
+        setProfile((prev) => prev ?? { id: userId, role: SINGLE_TENANT ? 'master' : undefined } as PublicProfile);
       } finally {
         setLoading(false);
       }

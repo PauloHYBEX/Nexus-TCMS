@@ -10,6 +10,7 @@ import { openAIGenerateText } from '@/integrations/openai/client';
 import { anthropicGenerateText } from '@/integrations/anthropic/client';
 import { groqGenerateText } from '@/integrations/groq/client';
 import { ollamaGenerateText } from '@/integrations/ollama/client';
+import { openRouterGenerateText } from '@/integrations/openrouter/client';
 import { validateWithSchema, tryRepairWithSchema, SchemaId } from '@/services/aiSchemas';
 
 // Local storage keys (derivadas dinamicamente para segurança)
@@ -26,127 +27,187 @@ const getStoredApiKey = (modelId: string): string | undefined => {
   }
 };
 
+// Modelos depreciados que devem ser removidos da config armazenada
+const DEPRECATED_MODEL_IDS = [
+  'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-pro-002',
+  'gemini-1.5-flash-8b', 'gemini-1.5-flash-002', 'gemini-2.0-flash-thinking-exp',
+  'groq-llama-3.1-70b', 'gemini-2.5-pro-preview',
+];
+
 // Default configuration
 const defaultConfig: AIModelConfig = {
   models: [
+    // ── Gemini (chave gratuita em aistudio.google.com)
     {
-      id: 'gemini-1.5-flash',
-      name: 'Gemini 1.5 Flash',
+      id: 'gemini-2.0-flash',
+      name: 'Gemini 2.0 Flash',
       provider: 'gemini',
-      description: 'Google Gemini 1.5 Flash - Modelo rápido e eficiente para geração de texto',
-      version: '1.5',
-      capabilities: ['test-plan-generation', 'test-case-generation', 'test-execution-generation', 'general-completion'],
+      description: 'Google Gemini 2.0 Flash — Modelo estável de nova geração, rápido e gratuito com chave de API padrão.',
+      version: '2.0-flash',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'test-execution-generation', 'bug-detection', 'general-completion'],
       defaultForTask: 'test-plan-generation',
       apiKey: undefined,
       active: true,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
+      settings: { temperature: 0.7, maxOutputTokens: 8192 }
     },
     {
-      id: 'gemini-1.5-pro',
-      name: 'Gemini 1.5 Pro',
+      id: 'gemini-2.0-flash-lite',
+      name: 'Gemini 2.0 Flash Lite',
       provider: 'gemini',
-      description: 'Google Gemini 1.5 Pro - Modelo avançado com maior precisão e capacidade de raciocínio',
-      version: '1.5',
-      capabilities: ['test-plan-generation', 'test-case-generation', 'test-execution-generation', 'bug-detection', 'code-analysis', 'general-completion'],
+      description: 'Google Gemini 2.0 Flash Lite — Versão mais leve e econômica do Flash 2.0. Ideal para tarefas simples.',
+      version: '2.0-flash-lite',
+      capabilities: ['test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { temperature: 0.7, maxOutputTokens: 8192 }
+    },
+    {
+      id: 'gemini-2.5-pro-preview-03-25',
+      name: 'Gemini 2.5 Pro Preview',
+      provider: 'gemini',
+      description: 'Google Gemini 2.5 Pro Preview — Modelo mais capaz do Google, raciocínio avançado (experimental).',
+      version: '2.5-pro',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'bug-detection', 'code-analysis', 'general-completion'],
       defaultForTask: 'code-analysis',
       apiKey: undefined,
-      active: true,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
+      active: false,
+      settings: { temperature: 0.7, maxOutputTokens: 16384 }
     },
     {
-      id: 'gemini-1.5-pro-002',
-      name: 'Gemini 1.5 Pro (002)',
+      id: 'gemini-2.0-flash-thinking-exp-01-21',
+      name: 'Gemini 2.0 Flash Thinking',
       provider: 'gemini',
-      description: 'Google Gemini 1.5 Pro versão 002 - Última versão com melhorias de performance',
-      version: '1.5-002',
+      description: 'Google Gemini 2.0 Flash Thinking — Raciocínio chain-of-thought avançado, para análises complexas.',
+      version: '2.0-thinking',
       capabilities: ['test-plan-generation', 'test-case-generation', 'bug-detection', 'code-analysis', 'general-completion'],
-      defaultForTask: 'bug-detection',
+      defaultForTask: null,
       apiKey: undefined,
-      active: true,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
+      active: false,
+      settings: { temperature: 0.7, maxOutputTokens: 8192 }
     },
     {
       id: 'gemini-2.0-flash-exp',
       name: 'Gemini 2.0 Flash (Experimental)',
       provider: 'gemini',
-      description: 'Google Gemini 2.0 Flash Experimental - Modelo de próxima geração (Requer API Premium)',
-      version: '2.0-exp',
-      capabilities: ['test-plan-generation', 'test-case-generation', 'bug-detection', 'code-analysis', 'general-completion'],
-      defaultForTask: 'general-completion',
-      apiKey: undefined,
-      active: false, // Disabled by default as it requires premium access
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
-    },
-    {
-      id: 'gemini-1.5-flash-8b',
-      name: 'Gemini 1.5 Flash 8B',
-      provider: 'gemini',
-      description: 'Google Gemini 1.5 Flash 8B - Versão otimizada para velocidade com 8 bilhões de parâmetros',
-      version: '1.5-8b',
-      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
-      defaultForTask: null,
-      apiKey: undefined,
-      active: false,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
-    },
-    {
-      id: 'gemini-1.5-flash-002',
-      name: 'Gemini 1.5 Flash (002)',
-      provider: 'gemini',
-      description: 'Google Gemini 1.5 Flash versão 002 - Melhorias de performance e precisão',
-      version: '1.5-002',
-      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
-      defaultForTask: null,
-      apiKey: undefined,
-      active: false,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
-    },
-    {
-      id: 'gemini-2.0-flash-thinking-exp',
-      name: 'Gemini 2.0 Flash Thinking (Experimental)',
-      provider: 'gemini',
-      description: 'Google Gemini 2.0 Flash Thinking - Modelo experimental com capacidades avançadas de raciocínio',
-      version: '2.0-thinking-exp',
+      description: 'Google Gemini 2.0 Flash Experimental — Capacidades multimodais avançadas.',
+      version: '2.0-flash-exp',
       capabilities: ['test-plan-generation', 'test-case-generation', 'bug-detection', 'code-analysis', 'general-completion'],
       defaultForTask: null,
       apiKey: undefined,
       active: false,
-      settings: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
-        topK: 40,
-        topP: 0.95,
-      }
+      settings: { temperature: 0.7, maxOutputTokens: 8192 }
+    },
+    // ── Groq (API gratuita em console.groq.com)
+    {
+      id: 'groq-llama-3.3-70b',
+      name: 'LLaMA 3.3 70B (Groq)',
+      provider: 'groq',
+      description: 'Meta LLaMA 3.3 70B via Groq — Versão mais recente e precisa, gratuita',
+      version: '3.3-70b',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'llama-3.3-70b-versatile' }
+    },
+    {
+      id: 'groq-llama-3.1-8b',
+      name: 'LLaMA 3.1 8B Instant (Groq)',
+      provider: 'groq',
+      description: 'Meta LLaMA 3.1 8B via Groq — Ultrarrápido para tarefas leves, completamente gratuito',
+      version: '3.1-8b',
+      capabilities: ['test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'llama-3.1-8b-instant' }
+    },
+    {
+      id: 'groq-mixtral-8x7b',
+      name: 'Mixtral 8x7B (Groq)',
+      provider: 'groq',
+      description: 'Mistral Mixtral 8x7B via Groq — Mistura de especialistas, ótima qualidade e velocidade, gratuito',
+      version: '8x7b',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'mixtral-8x7b-32768' }
+    },
+    {
+      id: 'groq-qwen-qwq-32b',
+      name: 'QwQ 32B (Groq)',
+      provider: 'groq',
+      description: 'Alibaba QwQ 32B via Groq — Modelo de raciocínio avançado, excelente para análise de testes, gratuito',
+      version: 'qwq-32b',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'bug-detection', 'code-analysis', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'qwen-qwq-32b' }
+    },
+    // ── OpenRouter (plano gratuito em openrouter.ai)
+    {
+      id: 'openrouter-llama-3.1-free',
+      name: 'LLaMA 3.1 70B Free (OpenRouter)',
+      provider: 'openrouter',
+      description: 'Meta LLaMA 3.1 70B via OpenRouter plano free — Sem custo, sem limites restritivos',
+      version: '3.1-70b-free',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'meta-llama/llama-3.1-70b-instruct:free' }
+    },
+    {
+      id: 'openrouter-gemma2-9b-free',
+      name: 'Gemma 2 9B Free (OpenRouter)',
+      provider: 'openrouter',
+      description: 'Google Gemma 2 9B via OpenRouter free — Modelo Google leve e preciso sem custo',
+      version: '2-9b-free',
+      capabilities: ['test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'google/gemma-2-9b-it:free' }
+    },
+    {
+      id: 'openrouter-mistral-7b-free',
+      name: 'Mistral 7B Free (OpenRouter)',
+      provider: 'openrouter',
+      description: 'Mistral 7B via OpenRouter free — Rápido e eficiente para geração de testes simples',
+      version: '7b-free',
+      capabilities: ['test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'mistralai/mistral-7b-instruct:free' }
+    },
+    // ── Ollama novos modelos locais
+    {
+      id: 'ollama-qwen25',
+      name: 'Qwen 2.5 7B (Ollama Local)',
+      provider: 'ollama',
+      description: 'Alibaba Qwen 2.5 7B local via Ollama — Excelente desempenho em geração de código e testes',
+      version: '2.5-7b',
+      capabilities: ['test-plan-generation', 'test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'qwen2.5:7b', baseUrl: 'http://localhost:11434' }
+    },
+    {
+      id: 'ollama-phi3-mini',
+      name: 'Phi-3 Mini (Ollama Local)',
+      provider: 'ollama',
+      description: 'Microsoft Phi-3 Mini local via Ollama — Ultra leve e rápido para geração de casos simples',
+      version: 'mini-3',
+      capabilities: ['test-case-generation', 'general-completion'],
+      defaultForTask: null,
+      apiKey: undefined,
+      active: false,
+      settings: { apiModel: 'phi3:mini', baseUrl: 'http://localhost:11434' }
     }
   ],
   promptTemplates: [
@@ -276,14 +337,14 @@ const defaultConfig: AIModelConfig = {
       active: true
     }
   ],
-  defaultModel: 'gemini-1.5-flash',
+  defaultModel: 'gemini-2.0-flash',
   tasks: {
-    'test-plan-generation': 'gemini-1.5-flash',
-    'test-case-generation': 'gemini-1.5-pro',
-    'test-execution-generation': 'gemini-1.5-flash',
-    'bug-detection': 'gemini-1.5-pro-002',
-    'code-analysis': 'gemini-1.5-pro',
-    'general-completion': 'gemini-1.5-flash'
+    'test-plan-generation': 'gemini-2.0-flash',
+    'test-case-generation': 'gemini-2.0-flash',
+    'test-execution-generation': 'gemini-2.0-flash',
+    'bug-detection': 'gemini-2.5-pro-preview-03-25',
+    'code-analysis': 'gemini-2.5-pro-preview-03-25',
+    'general-completion': 'gemini-2.0-flash'
   }
 };
 
@@ -298,10 +359,34 @@ const normalizeForDb = <T>(schemaId: SchemaId | undefined, data: T): T => {
   return data;
 };
 
-// Load configuration from local storage or use default
+// Carrega config, migra modelos depreciados e mescla novos modelos do defaultConfig
 export const loadConfig = (): AIModelConfig => {
-  const storedConfig = localStorage.getItem(getMcpConfigKey());
-  return storedConfig ? JSON.parse(storedConfig) : defaultConfig;
+  const raw = localStorage.getItem(getMcpConfigKey());
+  if (!raw) return defaultConfig;
+  let stored: AIModelConfig;
+  try { stored = JSON.parse(raw); } catch { return defaultConfig; }
+
+  // Remove modelos depreciados
+  let models = stored.models.filter(m => !DEPRECATED_MODEL_IDS.includes(m.id));
+
+  // Adiciona novos modelos do defaultConfig que ainda não existem
+  const knownIds = new Set(models.map(m => m.id));
+  const newModels = defaultConfig.models.filter(m => !knownIds.has(m.id));
+  models = [...models, ...newModels];
+
+  // Corrige referências de tarefas que apontavam para modelos depreciados
+  const validIds = new Set(models.map(m => m.id));
+  const tasks = { ...stored.tasks } as Record<AIModelTask, string>;
+  (Object.keys(tasks) as AIModelTask[]).forEach(task => {
+    if (!validIds.has(tasks[task]) || DEPRECATED_MODEL_IDS.includes(tasks[task])) {
+      const fallback = defaultConfig.tasks[task];
+      tasks[task] = validIds.has(fallback) ? fallback : (models[0]?.id ?? '');
+    }
+  });
+
+  const merged = { ...stored, models, tasks };
+  localStorage.setItem(getMcpConfigKey(), JSON.stringify(merged));
+  return merged;
 };
 
 // Save configuration to local storage
@@ -313,6 +398,28 @@ export const saveConfig = (config: AIModelConfig): void => {
 export const resetConfig = (): AIModelConfig => {
   localStorage.setItem(getMcpConfigKey(), JSON.stringify(defaultConfig));
   return defaultConfig;
+};
+
+// ── Seleção automática inteligente de modelo ──────────────────────────────
+// Prioridade: gemini > groq > openrouter > ollama > other
+const PROVIDER_PRIORITY: Record<string, number> = {
+  gemini: 10, groq: 8, openrouter: 6, anthropic: 7, openai: 9, ollama: 4, other: 1
+};
+
+// Verifica se um modelo tem API key válida configurada
+const modelHasKey = (model: AIModel): boolean => {
+  if (model.provider === 'ollama') return true; // local, sem chave
+  const stored = getStoredApiKey(model.id);
+  return Boolean(stored || model.apiKey);
+};
+
+// Seleciona automaticamente o melhor modelo disponível para uma tarefa
+export const selectBestModelForTask = (task: AIModelTask, config?: AIModelConfig): AIModel | null => {
+  const cfg = config || loadConfig();
+  const candidates = cfg.models
+    .filter(m => m.active && m.capabilities.includes(task) && modelHasKey(m))
+    .sort((a, b) => (PROVIDER_PRIORITY[b.provider] ?? 0) - (PROVIDER_PRIORITY[a.provider] ?? 0));
+  return candidates[0] ?? null;
 };
 
 // Get model by ID
@@ -482,26 +589,32 @@ export const executeTask = async (
   templateId?: string
 ): Promise<unknown> => {
   const config = loadConfig();
-  
-  // Get model with robust fallbacks (user config -> defaultConfig -> first active)
-  let model = modelId 
-    ? config.models.find(m => m.id === modelId)
-    : config.models.find(m => m.id === config.tasks[task]);
 
-  if (!model || !model.active) {
-    // Try from defaultConfig
-    model = modelId
-      ? defaultConfig.models.find(m => m.id === modelId)
-      : defaultConfig.models.find(m => m.id === defaultConfig.tasks[task]);
+  // Seleção automática inteligente quando modelId = 'auto' ou não especificado
+  const useAuto = !modelId || modelId === 'auto' || modelId === 'default';
+  let model: AIModel | undefined;
+
+  if (useAuto) {
+    // 1) Tenta seleção inteligente: modelo ativo + chave configurada + capability correta
+    const best = selectBestModelForTask(task, config);
+    if (best) { model = best; }
+    else {
+      // 2) Modelo atribuído para a tarefa (mesmo sem chave confirmada)
+      model = config.models.find(m => m.id === config.tasks[task] && m.active)
+        || defaultConfig.models.find(m => m.id === defaultConfig.tasks[task] && m.active);
+    }
+  } else {
+    model = config.models.find(m => m.id === modelId)
+      || defaultConfig.models.find(m => m.id === modelId);
   }
 
   if (!model || !model.active) {
-    // Final fallback: first active from either stored or default
-    model = (config.models.find(m => m.active) || defaultConfig.models.find(m => m.active));
+    // Último recurso: primeiro ativo disponível
+    model = config.models.find(m => m.active) || defaultConfig.models.find(m => m.active);
   }
 
   if (!model || !model.active) {
-    throw new Error(`No active model found for task: ${task}`);
+    throw new Error(`Nenhum modelo ativo encontrado para a tarefa: ${task}`);
   }
   
   // Debug logging of resolved model and API key presence (does not reveal the key value)
@@ -541,10 +654,13 @@ export const executeTask = async (
   // Execute baseado no provider
   switch (model.provider) {
     case 'gemini': {
+      const geminiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
+        ? model.settings.apiModel.trim()
+        : model.id;
       if (isGeneralCompletion) {
-        return generateText(prompt, model.id);
+        return generateText(prompt, geminiModelName);
       }
-      const raw = await generateStructuredContent<unknown>(prompt, model.id);
+      const raw = await generateStructuredContent<unknown>(prompt, geminiModelName);
       if (schemaId) {
         try {
           const valid = validateWithSchema(schemaId, raw);
@@ -646,6 +762,34 @@ export const executeTask = async (
         throw new Error(`Erro ao analisar JSON da resposta Groq: ${msg}`);
       }
     }
+    case 'openrouter': {
+      const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
+        ? model.settings.apiModel.trim()
+        : model.id;
+      const apiKey = getStoredApiKey(model.id) || model.apiKey;
+      const text = await openRouterGenerateText(prompt, apiModelName, apiKey);
+      if (isGeneralCompletion) return text;
+      try {
+        const parsed = parseJsonFromText<unknown>(text);
+        if (!schemaId) return parsed;
+        try {
+          const valid = validateWithSchema(schemaId, parsed);
+          return normalizeForDb(schemaId, valid);
+        } catch (err: unknown) {
+          const repaired = tryRepairWithSchema(schemaId, parsed);
+          try {
+            const valid = validateWithSchema(schemaId, repaired);
+            return normalizeForDb(schemaId, valid);
+          } catch (err2: unknown) {
+            const msg = err2 instanceof Error ? err2.message : String(err2);
+            throw new Error(`Validação de schema (${schemaId}) falhou após tentativa de reparo: ${msg}`);
+          }
+        }
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new Error(`Erro ao analisar JSON da resposta OpenRouter: ${msg}`);
+      }
+    }
     case 'ollama': {
       const baseUrl = (model.settings && model.settings.baseUrl) ? model.settings.baseUrl : undefined;
       const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
@@ -690,53 +834,25 @@ export const saveMCPConfigToSupabase = async (userId: string, config: AIModelCon
         apiKey: undefined
       }))
     };
-    
+
+    // Load existing settings blob first so we don't overwrite other keys
+    const { data: existing } = await supabase
+      .from('user_settings')
+      .select('settings')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const existingSettings = (() => {
+      try { return JSON.parse((existing as any)?.settings || '{}'); } catch { return {}; }
+    })();
+
+    const merged = { ...existingSettings, mcp_config: configForStorage };
+
     const { error } = await supabase
       .from('user_settings')
-      .upsert({
-        user_id: userId,
-        key: 'mcp_config',
-        // Valor salvo como JSON compatível com Supabase
-        value: (configForStorage as unknown),
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id,key' });
-      
-    // Tratamento robusto para conflitos (409 / unique_violation)
-    if (
-      error &&
-      (
-        error.code === '409' || // HTTP Conflict (via PostgREST)
-        error.code === '23505' || // unique_violation
-        /duplicate key|unique constraint|conflict/i.test(error.message || '')
-      )
-    ) {
-      const { error: updateError } = await supabase
-        .from('user_settings')
-        .update({
-          // Valor salvo como JSON compatível com Supabase
-          value: (configForStorage as unknown),
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-        .eq('key', 'mcp_config');
+      .upsert({ user_id: userId, settings: JSON.stringify(merged), updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
 
-      if (updateError) {
-        const { error: insertError } = await supabase
-          .from('user_settings')
-          .insert({
-            user_id: userId,
-            key: 'mcp_config',
-            // Valor salvo como JSON compatível com Supabase
-            value: (configForStorage as unknown),
-            updated_at: new Date().toISOString()
-          })
-          .select();
-        
-        if (insertError) throw insertError;
-      }
-    } else if (error) {
-      throw error;
-    }
+    if (error) throw error;
   } catch (error) {
     console.error('Error saving MCP config to Supabase:', error);
     throw error;
@@ -748,47 +864,131 @@ export const loadMCPConfigFromSupabase = async (userId: string): Promise<AIModel
   try {
     const { data, error } = await supabase
       .from('user_settings')
-      .select('value')
+      .select('settings')
       .eq('user_id', userId)
-      .eq('key', 'mcp_config')
-      .single();
-      
+      .maybeSingle();
+
     if (error) {
-      if (error.code === 'PGRST116' || error.code === '42P01') {
-        // Record not found or table doesn't exist, use default
-        console.warn('User settings table not found or no config saved, using default');
-        return defaultConfig;
-      }
-      throw error;
+      console.warn('User settings table not accessible, using local config');
+      return null;
     }
-    
-    if (!data) return defaultConfig;
-    
+
+    if (!data) return null;
+
+    const parsed = (() => {
+      try { return JSON.parse((data as any).settings || '{}'); } catch { return {}; }
+    })();
+
+    const config = parsed.mcp_config as AIModelConfig | undefined;
+    if (!config?.models) return null;
+
     // Restore API keys from local storage
     const storedApiKeys = JSON.parse(localStorage.getItem(getApiKeysKey()) || '{}');
-    const config = (data.value as unknown) as AIModelConfig;
-    
     config.models = config.models.map(model => ({
       ...model,
       apiKey: storedApiKeys[model.id] || model.apiKey
     }));
-    
+
     return config;
   } catch (error) {
     console.error('Error loading MCP config from Supabase:', error);
-    return defaultConfig;
+    return null;
   }
 };
 
 // Save API keys to local storage
 export const saveApiKeys = (config: AIModelConfig): void => {
   const apiKeys: Record<string, string> = {};
-  
+
   config.models.forEach(model => {
     if (model.apiKey) {
       apiKeys[model.id] = model.apiKey;
     }
   });
-  
+
   localStorage.setItem(getApiKeysKey(), JSON.stringify(apiKeys));
-}; 
+};
+
+// ── Busca de modelos disponíveis via API do provedor ────────────────────────
+export interface ProviderModel {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export const fetchProviderModels = async (
+  provider: AIModel['provider'],
+  apiKey: string,
+  baseUrl?: string
+): Promise<ProviderModel[]> => {
+  switch (provider) {
+    case 'gemini': {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=100`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`Gemini ${res.status}: ${(err as any)?.error?.message || res.statusText}`);
+      }
+      const data = await res.json();
+      return ((data.models ?? []) as any[])
+        .filter((m: any) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+        .map((m: any) => ({
+          id: (m.name as string).replace('models/', ''),
+          name: m.displayName || (m.name as string).replace('models/', ''),
+          description: m.description,
+        }));
+    }
+    case 'openai': {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`OpenAI ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      return ((data.data ?? []) as any[])
+        .filter((m: any) => /^gpt/.test(m.id))
+        .sort((a: any, b: any) => b.created - a.created)
+        .slice(0, 30)
+        .map((m: any) => ({ id: m.id, name: m.id }));
+    }
+    case 'groq': {
+      const res = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) throw new Error(`Groq ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      return ((data.data ?? []) as any[]).map((m: any) => ({ id: m.id, name: m.id }));
+    }
+    case 'openrouter': {
+      const res = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}`, 'HTTP-Referer': window.location.origin },
+      });
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      return ((data.data ?? []) as any[]).map((m: any) => ({
+        id: m.id,
+        name: m.name || m.id,
+        description: m.description,
+      }));
+    }
+    case 'anthropic': {
+      // Anthropic não tem endpoint público de listagem; retorna modelos conhecidos
+      return [
+        { id: 'claude-opus-4-5',              name: 'Claude Opus 4.5 (mais capaz)' },
+        { id: 'claude-sonnet-4-5',             name: 'Claude Sonnet 4.5' },
+        { id: 'claude-3-7-sonnet-20250219',    name: 'Claude 3.7 Sonnet' },
+        { id: 'claude-3-5-sonnet-20241022',    name: 'Claude 3.5 Sonnet' },
+        { id: 'claude-3-5-haiku-20241022',     name: 'Claude 3.5 Haiku (rápido)' },
+        { id: 'claude-3-opus-20240229',        name: 'Claude 3 Opus' },
+      ];
+    }
+    case 'ollama': {
+      const base = baseUrl || 'http://localhost:11434';
+      const res = await fetch(`${base}/api/tags`);
+      if (!res.ok) throw new Error(`Ollama ${res.status}: ${res.statusText}`);
+      const data = await res.json();
+      return ((data.models ?? []) as any[]).map((m: any) => ({ id: m.name, name: m.name }));
+    }
+    default:
+      return [];
+  }
+};

@@ -2,32 +2,34 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Function to get API key from Model Control Service
 const getGeminiApiKey = (modelId?: string): string => {
-  // Try to get from Model Control Service
   try {
-    // 1) Prefer per-model key saved in dedicated storage
-    const storedKeysRaw = localStorage.getItem('mcp_api_keys');
-    const storedKeys = storedKeysRaw ? JSON.parse(storedKeysRaw) : {};
-    if (modelId && storedKeys[modelId]) {
-      return storedKeys[modelId];
-    }
+    const host = typeof window !== 'undefined' ? window.location.hostname : '';
+    const keysKeys = host ? [`${host}_mcp_api_keys`, 'mcp_api_keys'] : ['mcp_api_keys'];
+    const configKeys = host ? [`${host}_mcp_config`, 'mcp_config'] : ['mcp_config'];
 
-    const configRaw = localStorage.getItem('mcp_config');
-    if (configRaw) {
-      const parsedConfig = JSON.parse(configRaw);
-      // 2) Try to find any Gemini model with a key in mcp_api_keys
-      const geminiIds: string[] = parsedConfig.models?.filter((m: any) => m.provider === 'gemini').map((m: any) => m.id) || [];
-      for (const id of geminiIds) {
-        if (storedKeys[id]) return storedKeys[id];
-      }
-      // 3) Fallback: some environments might store apiKey directly in mcp_config
-      const geminiModel = parsedConfig.models?.find((m: any) => m.provider === 'gemini' && m.apiKey);
-      if (geminiModel?.apiKey) return geminiModel.apiKey as string;
+    let storedKeys: Record<string, string> = {};
+    for (const k of keysKeys) {
+      const raw = localStorage.getItem(k);
+      if (raw) { try { storedKeys = JSON.parse(raw); break; } catch {} }
+    }
+    if (modelId && storedKeys[modelId]) return storedKeys[modelId];
+
+    for (const k of configKeys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      try {
+        const cfg = JSON.parse(raw);
+        const geminiIds: string[] = cfg.models?.filter((m: any) => m.provider === 'gemini').map((m: any) => m.id) || [];
+        for (const id of geminiIds) {
+          if (storedKeys[id]) return storedKeys[id];
+        }
+        const geminiModel = cfg.models?.find((m: any) => m.provider === 'gemini' && m.apiKey);
+        if (geminiModel?.apiKey) return geminiModel.apiKey as string;
+      } catch {}
     }
   } catch (error) {
     console.warn('Failed to load API key from Model Control Service:', error);
   }
-  
-  // No fallback key: require user to configure a valid API key via Model Control Panel
   return '';
 };
 
@@ -67,7 +69,7 @@ const getActiveModelForTask = (task?: string): string => {
   }
   
   // Fallback to default
-  return 'gemini-1.5-flash';
+  return 'gemini-2.0-flash';
 };
 
 // Helper function to get a model instance

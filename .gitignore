@@ -68,5 +68,11 @@ Thumbs.db
 # Large/binary and temp folders
 Nova pasta/
 
+# SQLite local database (never commit db file)
+data/
+*.db
+*.db-shm
+*.db-wal
+
 # Ignora arquivo privado
 /anteriormente havia me passado um descritivo com....docx

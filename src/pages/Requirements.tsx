@@ -17,11 +17,14 @@ import { StandardButton } from '@/components/StandardButton';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { 
-  priorityLabel, 
   priorityBadgeClass, 
-  requirementStatusLabel, 
-  requirementStatusBadgeClass 
+  priorityLabel, 
+  requirementStatusBadgeClass, 
+  requirementStatusLabel 
 } from '@/lib/labels';
+import { PriorityTag } from '@/components/ui/PriorityTag';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import SearchableCombobox from '@/components/SearchableCombobox';
 import { Input } from '@/components/ui/input';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
@@ -104,7 +107,7 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
       openCreate();
       // limpar flag para evitar abrir repetidamente
       params.delete('openCreate');
-      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, requirements]);
@@ -113,11 +116,11 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
     const params = buildSafeSearchParams(location.search);
     if (params.has('id')) {
       params.delete('id');
-      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
     if (params.has('openCreate')) {
       params.delete('openCreate');
-      navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: true });
+      navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: true });
     }
   };
 
@@ -383,23 +386,20 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
         </>
       )}
 
-      {/* Toolbar de filtros e modo de visualização */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             placeholder="Buscar por ID ou Título"
-            className="pl-9"
+            className="pl-9 h-9 bg-muted/20 border-border/60"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="flex items-center gap-3">
-          {!embedded && (
-            <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
-          )}
-          {/* Quando embedded, o botão '+ Novo' fica no cabeçalho de Gestão. */}
-        </div>
+        {!embedded && (
+          <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -408,111 +408,98 @@ export const Requirements = ({ embedded = false, preferredViewMode, onPreferredV
         <>
           {viewMode === 'cards' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filtered.map(req => (
-                <Card key={req.id} className="border border-border/50 h-full overflow-hidden flex flex-col cursor-pointer card-hover" onClick={() => handleViewDetails(req)}>
+              {filtered.map((req) => (
+                <Card key={req.id} className="border border-border/50 flex flex-col cursor-pointer card-hover" onClick={() => handleViewDetails(req)}>
                   <CardHeader className="p-4 pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">
-                          {`REQ-${(req.id || '').slice(0,4)}`}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded flex-shrink-0 mt-0.5">
+                          {req.sequence ? `REQ-${String(req.sequence).padStart(3, '0')}` : `REQ-${(req.id || '').slice(0, 4)}`}
                         </span>
-                        <CardTitle className="text-base line-clamp-2 leading-tight min-w-0">{req.title}</CardTitle>
+                        <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug min-w-0">{req.title}</CardTitle>
                       </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <StatusDot status={req.status} label={requirementStatusLabel(req.status)} />
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4 pt-0">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex gap-2">
-                        <Badge className={priorityBadgeClass(req.priority)}>{priorityLabel(req.priority)}</Badge>
-                        <Badge className={requirementStatusBadgeClass(req.status)}>{requirementStatusLabel(req.status)}</Badge>
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">{req.description}</p>
+                    <div className="mt-auto flex items-center justify-between">
+                      <PriorityTag priority={req.priority} />
+                      <div className="flex items-center gap-2">
+                        <UserAvatar userId={req.user_id} />
+                        {hasPermission('can_manage_cases') && (
+                          <StandardButton variant="ghost" size="sm" compact iconOnly ariaLabel="Editar" icon={Pencil}
+                            onClick={(e) => { e.stopPropagation(); openEdit(req); }} className="h-8 w-8" />
+                        )}
+                        {hasPermission('can_manage_cases') && (
+                          <StandardButton variant="ghost" size="sm" compact iconOnly ariaLabel="Excluir" icon={Trash2}
+                            onClick={(e) => { e.stopPropagation(); remove(req.id); }} className="h-8 w-8" />
+                        )}
                       </div>
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-3 mb-3">{req.description}</p>
                   </CardContent>
-                  <CardFooter className="p-4 pt-0 mt-auto flex items-center justify-between">
-                    <div className="text-xs text-muted-foreground">#{req.id.slice(0, 8)}</div>
-                    <div className="flex gap-1">
-                      {hasPermission('can_manage_cases') && (
-                      <StandardButton
-                        variant="ghost"
-                        size="sm"
-                        compact
-                        iconOnly
-                        ariaLabel="Editar"
-                        icon={Pencil}
-                        onClick={(e) => { e.stopPropagation(); openEdit(req); }}
-                        className="h-8 w-8"
-                      />)}
-                      {hasPermission('can_manage_cases') && (
-                      <StandardButton
-                        variant="ghost"
-                        size="sm"
-                        compact
-                        iconOnly
-                        ariaLabel="Excluir"
-                        icon={Trash2}
-                        onClick={(e) => { e.stopPropagation(); remove(req.id); }}
-                        className="h-8 w-8"
-                      />)}
-                    </div>
-                  </CardFooter>
                 </Card>
               ))}
             </div>
           ) : (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[80px_1fr_120px_120px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                <div className="pt-px">ID</div>
-                <div className="text-center pt-px">Título</div>
-                <div className="text-center pt-px">Prioridade</div>
-                <div className="text-center pt-px">Status</div>
+              <div className="grid grid-cols-[80px_4fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div>ID</div>
+                <div>Título</div>
+                <div>Status</div>
+                <div>Prioridade</div>
+                <div className="text-center">Criado por</div>
+                <div>Criado em</div>
                 <div className="flex justify-end">Ações</div>
               </div>
               {/* Rows */}
               <div className="divide-y divide-border">
                 {filtered.map((req) => (
-                  <div key={req.id} className="grid grid-cols-[80px_1fr_120px_120px_100px] items-start gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => handleViewDetails(req)}>
+                  <div key={req.id} className="grid grid-cols-[80px_4fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => handleViewDetails(req)}>
                     {/* ID */}
-                    <div className="flex items-center">
-                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">{`REQ-${(req.id || '').slice(0,4)}`}</span>
+                    <div>
+                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
+                        {req.sequence ? `REQ-${String(req.sequence).padStart(3, '0')}` : `REQ-${(req.id || '').slice(0, 4)}`}
+                      </span>
                     </div>
-                    {/* Título */}
-                    <div className="text-sm font-medium leading-tight text-center flex items-center justify-center min-w-0">
-                      <span className="truncate">{req.title}</span>
-                    </div>
-                    {/* Prioridade */}
-                    <div className="flex items-center justify-center">
-                      <Badge className={priorityBadgeClass(req.priority)}>{priorityLabel(req.priority)}</Badge>
+                    {/* Título + desc */}
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground truncate leading-tight">{req.title}</div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">{req.description}</div>
                     </div>
                     {/* Status */}
-                    <div className="flex items-center justify-center">
-                      <Badge className={requirementStatusBadgeClass(req.status)}>{requirementStatusLabel(req.status)}</Badge>
+                    <div>
+                      <StatusDot status={req.status} label={requirementStatusLabel(req.status)} />
+                    </div>
+                    {/* Prioridade */}
+                    <div>
+                      <PriorityTag priority={req.priority} />
+                    </div>
+                    {/* Avatar */}
+                    <div className="flex justify-center">
+                      <UserAvatar userId={req.user_id} />
+                    </div>
+                    {/* Data */}
+                    <div className="text-xs text-muted-foreground">
+                      {req.created_at ? new Date(req.created_at).toLocaleDateString('pt-BR') : '—'}
                     </div>
                     {/* Ações */}
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-end gap-0.5">
                       {hasPermission('can_manage_cases') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); openEdit(req); }}
-                        className="h-8 w-8 p-0"
-                        title="Editar"
-                        aria-label="Editar"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>)}
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEdit(req); }}
+                          className="h-8 w-8 p-0" title="Editar" aria-label="Editar">
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                       {hasPermission('can_manage_cases') && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); remove(req.id); }}
-                        className="h-8 w-8 p-0"
-                        title="Excluir"
-                        aria-label="Excluir"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>)}
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); remove(req.id); }}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive" title="Excluir" aria-label="Excluir">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

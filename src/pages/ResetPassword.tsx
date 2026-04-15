@@ -13,15 +13,13 @@ export default function ResetPassword() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // When arriving from Supabase email link, a session should be set automatically.
-    // We check if there's a session to allow updating the password.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
-        setError('Link inválido ou expirado. Solicite uma nova recuperação de senha.');
+        setError('No modo local, faça login primeiro para alterar a senha.');
       } else {
         setReady(true);
       }
-    }).catch(() => setError('Não foi possível validar a sessão de recuperação.'));
+    }).catch(() => setError('Não foi possível validar a sessão local.'));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,7 +55,7 @@ export default function ResetPassword() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-md p-8 bg-card shadow-lg">
         <CardHeader className="flex flex-col items-center">
-          <h1 className="text-2xl font-bold text-primary mb-2">QualityCore AI</h1>
+          <h1 className="text-2xl font-bold text-primary mb-2">Nexus Testing</h1>
           <CardTitle className="text-lg font-semibold mb-1">Redefinir senha</CardTitle>
           <span className="text-sm text-muted-foreground">Defina sua nova senha abaixo</span>
         </CardHeader>

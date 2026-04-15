@@ -1,22 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
-import { Sparkles, Loader2, FileText, Zap, ChevronsUpDown, Check } from 'lucide-react';
-
+import { Sparkles, Loader2, Zap, Upload, AlertCircle } from 'lucide-react';
 import { AIModel } from '@/types';
 import * as ModelControlService from '@/services/modelControlService';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useAISettings } from '@/hooks/useAISettings';
 import { useProject } from '@/contexts/ProjectContext';
 
@@ -31,7 +24,7 @@ interface AIBatchGeneratorFormProps {
 
 export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standard' }: AIBatchGeneratorFormProps) => {
   const { user } = useAuth();
-  const { settings, updateSettings } = useAISettings();
+  const { settings } = useAISettings();
   const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [documentContent, setDocumentContent] = useState('');
@@ -39,7 +32,6 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
   const [file, setFile] = useState<File | null>(null);
   const [selectedModel, setSelectedModel] = useState('default');
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
 
   // Persistência de estado do formulário para evitar perda em reloads involuntários
   useEffect(() => {
@@ -672,230 +664,127 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
   };
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-          {type === 'plan'
-            ? (mode === 'plan-with-cases' ? 'Plano Único com Múltiplos Casos (IA)' : 'Geração em Lote de Planos de Teste')
-            : 'Geração em Lote de Casos de Teste'}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6" aria-busy={loading}>
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+      {/* Top bar: project badge + mode chip + file upload */}
+      <div className="flex items-center justify-between pb-3 border-b border-border/50">
+        <div className="flex items-center gap-2">
           {currentProject?.name ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">Projeto: {currentProject.name}</Badge>
-            </div>
+            <Badge variant="secondary" className="gap-1.5 text-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
+              {currentProject.name}
+            </Badge>
           ) : (
-            <div className="text-sm text-amber-600">Selecione um projeto no topo antes de gerar.</div>
+            <span className="text-xs text-amber-500 flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Selecione um projeto antes de gerar
+            </span>
           )}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="file-upload">Upload de Documento (Opcional)</Label>
-              <div className="flex items-center gap-4">
-                <Input
-                  id="file-upload"
-                  type="file"
-                  accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls"
-                  onChange={handleFileChange}
-                  className="flex-1"
-                />
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <FileText className="h-4 w-4" />
-                  .txt, .md, .doc, .docx, .pdf, .xlsx, .xls
-                </div>
-              </div>
-            </div>
+          <Badge variant="outline" className="text-xs">
+            {type === 'plan'
+              ? (mode === 'plan-with-cases' ? 'Plano + Casos' : 'Lote de Planos')
+              : 'Lote de Casos'}
+          </Badge>
+        </div>
+        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors" title="Aceita .txt, .md, .doc, .docx, .pdf, .xlsx, .xls">
+          <Upload className="h-3.5 w-3.5" />
+          {file ? <span className="max-w-[140px] truncate">{file.name}</span> : 'Importar documento'}
+          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls" onChange={handleFileChange} />
+        </label>
+      </div>
 
-            <div>
-              <Label htmlFor="document-content">
-                {mode === 'plan-with-cases' ? 'Tabela/Conteúdo Base *' : 'Conteúdo do Documento *'}
-                <span className="text-sm text-gray-500 font-normal ml-2">
-                  {mode === 'plan-with-cases'
-                    ? '(Cole a tabela/descrição com funcionalidades, objetivos, escopo, ambiente, branches e testes)'
-                    : '(Cole aqui o conteúdo completo do documento para análise)'}
-                </span>
-              </Label>
-              <Textarea
-                id="document-content"
-                value={documentContent}
-                onChange={(e) => setDocumentContent(e.target.value)}
-                rows={12}
-                placeholder={mode === 'plan-with-cases'
-                  ? 'Cole aqui a tabela/descrição. Ex.: colunas (Funcionalidade | Objetivo | Escopo | Ambiente | Branches | Testes) e linhas com itens.'
-                  : (type === 'case' 
-                    ? "Cole aqui o conteúdo completo do documento que contém os requisitos, especificações ou descrições dos sistemas que precisam de casos de teste. A IA analisará automaticamente e identificará cada cenário/funcionalidade para gerar casos específicos."
-                    : "Cole aqui o conteúdo completo do documento que contém os requisitos, especificações ou descrições dos sistemas que precisam de planos de teste. A IA analisará automaticamente e identificará cada situação/funcionalidade para gerar planos específicos.")}
-                required
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="selectedModel" className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-blue-500" />
-                Modelo de IA
-                <Badge variant="outline" className="text-xs">Opcional</Badge>
-              </Label>
-              <Popover open={modelPickerOpen} onOpenChange={setModelPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={modelPickerOpen}
-                    className="w-full justify-between"
-                  >
-                    {selectedModel === 'default' ? (
-                      'Modelo Padrão (Recomendado)'
-                    ) : (
-                      <span className="flex items-center gap-2">
-                        <span>{selectedModelObj?.name || 'Modelo selecionado'}</span>
-                        {selectedModelObj && (
-                          <Badge variant="outline" className="text-xs capitalize">
-                            {selectedModelObj.provider}
-                          </Badge>
-                        )}
-                      </span>
-                    )}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput placeholder="Buscar modelo..." />
-                    <CommandList>
-                      <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          key="default"
-                          value="default"
-                          onSelect={() => {
-                            setSelectedModel('default');
-                            setModelPickerOpen(false);
-                          }}
-                        >
-                          <Check className={cn('mr-2 h-4 w-4', selectedModel === 'default' ? 'opacity-100' : 'opacity-0')} />
-                          Modelo Padrão (Recomendado)
-                          <span
-                            className="ml-auto flex items-center gap-2"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Checkbox
-                              aria-label="Definir como padrão"
-                              checked={(settings?.preferredModel || 'default') === 'default'}
-                              onCheckedChange={(checked) => {
-                                const isChecked = checked === true;
-                                if (isChecked) {
-                                  updateSettings({ preferredModel: 'default' });
-                                  toast({ title: 'Preferência salva', description: 'Modelo padrão do sistema selecionado.' });
-                                } else {
-                                  updateSettings({ preferredModel: 'default' });
-                                }
-                              }}
-                            />
-                            <span className="text-xs text-muted-foreground">Padrão</span>
-                          </span>
-                        </CommandItem>
-                        {availableModels.map(model => (
-                          <CommandItem
-                            key={model.id}
-                            value={`${model.name} ${model.provider}`}
-                            onSelect={() => {
-                              setSelectedModel(model.id);
-                              setModelPickerOpen(false);
-                            }}
-                          >
-                            <Check className={cn('mr-2 h-4 w-4', selectedModel === model.id ? 'opacity-100' : 'opacity-0')} />
-                            <span className="flex items-center gap-2">
-                              <span>{model.name}</span>
-                              <Badge variant="outline" className="text-xs capitalize">{model.provider}</Badge>
-                              {model.capabilities?.includes('general-completion') && (
-                                <Badge variant="outline" className="text-green-600 text-xs">Otimizado</Badge>
-                              )}
-                            </span>
-                            <span
-                              className="ml-auto flex items-center gap-2"
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Checkbox
-                                aria-label="Definir como padrão"
-                                checked={(settings?.preferredModel || 'default') === model.id}
-                                onCheckedChange={(checked) => {
-                                  const isChecked = checked === true;
-                                  if (isChecked) {
-                                    updateSettings({ preferredModel: model.id });
-                                    toast({ title: 'Preferência salva', description: `Modelo "${model.name}" definido como padrão.` });
-                                  } else {
-                                    updateSettings({ preferredModel: 'default' });
-                                  }
-                                }}
-                              />
-                              <span className="text-xs text-muted-foreground">Padrão</span>
-                            </span>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <p className="text-sm text-gray-500 mt-1">
-                Escolha um modelo específico ou deixe como "Modelo Padrão" para usar o <strong>modelo base</strong> configurado no Painel de Modelos.
-              </p>
-              {selectedModelObj && providerRequiresApiKey(selectedModelObj.provider) && (
-                <p className="text-xs text-amber-600 mt-1">Este provedor requer uma chave de API configurada no Painel de Modelos.</p>
-              )}
-            </div>
+      {/* 2-column main body */}
+      <div className="grid grid-cols-[1fr_240px] gap-5">
 
-            <div>
-              <Label htmlFor="context">Contexto Adicional</Label>
-              <Textarea
-                id="context"
-                value={context}
-                onChange={(e) => setContext(e.target.value)}
-                rows={3}
-                placeholder="Forneça informações adicionais sobre o contexto do projeto, tecnologias utilizadas, padrões de teste preferidos, etc."
-              />
-            </div>
+        {/* LEFT — main content textarea */}
+        <div>
+          <Label className="text-xs font-medium mb-1.5 block">
+            {mode === 'plan-with-cases' ? 'Tabela / Descrição de Funcionalidades' : 'Conteúdo do Documento'}
+            {' '}<span className="text-destructive">*</span>
+            <span className="text-muted-foreground font-normal ml-1.5">
+              {mode === 'plan-with-cases'
+                ? '— colunas: Funcionalidade, Objetivo, Escopo, Ambiente, Testes'
+                : '— cole o documento completo para análise automática'}
+            </span>
+          </Label>
+          <Textarea
+            value={documentContent}
+            onChange={(e) => setDocumentContent(e.target.value)}
+            rows={12}
+            className="text-sm resize-none font-mono"
+            placeholder={mode === 'plan-with-cases'
+              ? 'Funcionalidade | Objetivo | Escopo | Ambiente | Testes\n---\nLogin        | Autenticar usuário | ...'
+              : 'Cole o conteúdo do documento aqui.\nA IA identificará automaticamente os cenários e gerará os itens correspondentes.'}
+            required
+          />
+        </div>
+
+        {/* RIGHT — context, model, info, generate */}
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs font-medium mb-1.5 block">Contexto Adicional</Label>
+            <Textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              rows={4}
+              className="text-sm resize-none"
+              placeholder="Tecnologias, padrões, ambiente..."
+            />
           </div>
 
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h4 className="font-medium text-blue-900 mb-2">Como funciona a geração em lote:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• A IA analisará o documento fornecido</li>
-              <li>• Identificará automaticamente diferentes funcionalidades/sistemas</li>
-              <li>• Gerará {type === 'case' ? 'casos' : 'planos'} de teste específicos para cada situação encontrada</li>
-              <li>• Você poderá revisar, aprovar, rejeitar ou refazer cada {type === 'case' ? 'caso' : 'plano'} individualmente</li>
+          <div>
+            <Label className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              Modelo de IA
+              <span className="text-muted-foreground font-normal">(opcional)</span>
+            </Label>
+            <Select value={selectedModel} onValueChange={setSelectedModel}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default" className="text-xs">⚡ Modelo Padrão (Recomendado)</SelectItem>
+                {availableModels.map((m) => (
+                  <SelectItem key={m.id} value={m.id} className="text-xs">{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedModelObj && providerRequiresApiKey(selectedModelObj.provider) && (
+              <p className="text-xs text-amber-500 mt-1">⚠ Requer API key no Painel de Modelos</p>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-border/50 bg-muted/30 p-3 space-y-1">
+            <p className="text-xs font-medium text-foreground/80">Como funciona:</p>
+            <ul className="text-xs text-muted-foreground space-y-0.5">
+              <li>• A IA analisa o documento</li>
+              <li>• Identifica cenários/funcionalidades</li>
+              <li>• Gera {type === 'case' ? 'casos' : 'planos'} para cada situação</li>
+              <li>• Você revisa cada item individualmente</li>
             </ul>
           </div>
 
-          <div className="flex justify-end">
-            <Button 
-              type="submit" 
-              disabled={loading || !documentContent.trim() || !currentProject?.id} 
-              className="min-w-[200px]"
-              aria-busy={loading}
-              aria-live="polite"
-              aria-label={loading ? 'Analisando documento com IA, aguarde' : `Gerar ${type === 'case' ? 'Casos' : 'Planos'} com IA`}
-              role={loading ? 'status' : undefined}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analisando Documento...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  {mode === 'plan-with-cases' && type === 'plan' ? 'Gerar Plano Único com Casos' : `Gerar ${type === 'case' ? 'Casos' : 'Planos'} com IA`}
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+          <Button
+            type="submit"
+            disabled={loading || !documentContent.trim() || !currentProject?.id}
+            className="w-full"
+            aria-busy={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Analisando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" />
+                {mode === 'plan-with-cases' && type === 'plan'
+                  ? 'Gerar Plano com Casos'
+                  : `Gerar ${type === 'case' ? 'Casos' : 'Planos'} com IA`}
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 };

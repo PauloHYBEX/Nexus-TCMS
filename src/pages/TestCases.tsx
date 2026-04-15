@@ -6,13 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Search, ArrowUpDown, Filter, FileText, List, Grid, Calendar } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, FileText, Calendar, Sparkles } from 'lucide-react';
+import { PriorityTag } from '@/components/ui/PriorityTag';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { getTestCases, getTestCasesByProject, deleteTestCase, getTestPlans, getCaseLinkedCounts } from '@/services/supabaseService';
 import { TestCase } from '@/types';
 import { TestCaseForm } from '@/components/forms/TestCaseForm';
 import { DetailModal } from '@/components/DetailModal';
 import { StandardButton } from '@/components/StandardButton';
+import { ViewModeToggle } from '@/components/ViewModeToggle';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -33,6 +37,7 @@ import {
 
 export const TestCases = () => {
   const { initFromSearchParams, writeFromState } = usePaginationUrlSync();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   
   // Refs para altura virtual
@@ -60,6 +65,10 @@ export const TestCases = () => {
   });
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(9);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'title' | 'created_at' | 'updated_at' | 'priority'>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [q, setQ] = useState('');
   const [dateStart, setDateStart] = useState<string>('');
   const [dateEnd, setDateEnd] = useState<string>('');
@@ -322,7 +331,7 @@ export const TestCases = () => {
     <div className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="pl-24">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">Casos de Teste</h1>
           <p className="text-sm text-muted-foreground">Gerencie seus casos de teste</p>
         </div>
@@ -337,114 +346,68 @@ export const TestCases = () => {
         </StandardButton>
       </div>
 
-      {/* Search and Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             value={searchTerm}
             onChange={(e) => handleSearchTermChange(e.target.value)}
             placeholder="Buscar por título, ID ou descrição"
-            className="pl-10 h-10"
+            className="pl-9 h-9 bg-muted/20 border-border/60"
           />
         </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Seletor de projeto removido — seleção global pelo Dashboard */}
-          
-          {/* View Mode Toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('cards')}
-              className={viewMode === 'cards' ? 'bg-brand text-brand-foreground' : ''}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              className={viewMode === 'list' ? 'bg-brand text-brand-foreground' : ''}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {/* Sort Dropdown */}
+        <div className="flex items-center gap-1 shrink-0">
+          <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Ordenar
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">Ordenar</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>
-                Mais recente
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>
-                Mais antigo
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>
-                Título (A-Z)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>
-                Título (Z-A)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('priority'); setSortOrder('desc'); }}>
-                Prioridade (Alta-Baixa)
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>Mais recente</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>Mais antigo</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>Título (A-Z)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>Título (Z-A)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('priority'); setSortOrder('desc'); }}>Prioridade (Alta-Baixa)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Filter Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                {filterStatus === 'all' ? 'Todos' : `Prioridade: ${priorityLabel(filterStatus as 'low'|'medium'|'high'|'critical')}`}
+              <Button variant="ghost" size="sm" className={cn(
+                'h-9 gap-1.5 px-3 border font-normal',
+                filterStatus !== 'all'
+                  ? 'border-brand/50 text-brand bg-brand/5 hover:bg-brand/10'
+                  : 'border-border/60 hover:border-border'
+              )}>
+                <ListFilter className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">
+                  {filterStatus === 'all' ? 'Todos' : priorityLabel(filterStatus as 'low'|'medium'|'high'|'critical')}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setFilterStatus('all')}>
-                Todos
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('all')}>Todos</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setFilterStatus('low')}>
-                Prioridade Baixa
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterStatus('medium')}>
-                Prioridade Média
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterStatus('high')}>
-                Prioridade Alta
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setFilterStatus('critical')}>
-                Prioridade Crítica
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('low')}>Prioridade Baixa</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('medium')}>Prioridade Média</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('high')}>Prioridade Alta</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('critical')}>Prioridade Crítica</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Export Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <FileText className="h-4 w-4 mr-2" />
-                Exportar
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                <Download className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">Exportar</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
-                Exportar como CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                Exportar como Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                Exportar como PDF
-              </DropdownMenuItem>
+              <DropdownMenuItem>Exportar como CSV</DropdownMenuItem>
+              <DropdownMenuItem>Exportar como Excel</DropdownMenuItem>
+              <DropdownMenuItem>Exportar como PDF</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -455,47 +418,37 @@ export const TestCases = () => {
           {filteredCases.length > 0 ? paginatedCases.map((testCase) => (
             <Card
               key={testCase.id}
-              className="border border-border/50 cursor-pointer card-hover"
+              className="border border-border/50 cursor-pointer card-hover flex flex-col"
               onClick={() => handleViewDetails(testCase)}
             >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">
+              <CardHeader className="p-4 pb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded flex-shrink-0 mt-0.5">
                       {`CT-${testCase.sequence ? String(testCase.sequence).padStart(3, '0') : (testCase.id?.slice(0, 4) || '----')}`}
                     </span>
-                    <CardTitle className="text-base line-clamp-2 leading-tight min-w-0">
+                    <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug min-w-0">
                       {testCase.title}
                     </CardTitle>
                   </div>
+                  {Boolean(testCase.generated_by_ai) && (
+                    <span title="Gerado por IA"><Sparkles className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" /></span>
+                  )}
+                </div>
+                <div className="mt-1.5">
+                  <PriorityTag priority={testCase.priority} />
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+              <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
                   {testCase.description || 'Sem descrição'}
                 </p>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex gap-2">
-                    <Badge variant="outline" className={priorityBadgeClass(testCase.priority)}>
-                      {priorityLabel(testCase.priority)}
-                    </Badge>
-                    <Badge variant="outline" className={testCaseTypeBadgeClass(testCase.type)}>
-                      {testCaseTypeLabel(testCase.type)}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
+                <div className="mt-auto flex items-center justify-between">
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     {testCase.created_at ? new Date(testCase.created_at).toLocaleDateString('pt-BR') : 'N/A'}
                   </div>
-                  <StandardButton 
-                    variant="outline" 
-                    size="sm"
-                    onClick={(e) => { e.stopPropagation(); handleViewDetails(testCase); }}
-                  >
-                    Ver Detalhes
-                  </StandardButton>
+                  <UserAvatar userId={testCase.user_id} />
                 </div>
               </CardContent>
             </Card>
@@ -511,51 +464,70 @@ export const TestCases = () => {
           {filteredCases.length > 0 ? (
             <div className="bg-card border border-border rounded-lg overflow-hidden">
               {/* Header da tabela */}
-              <div className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              <div className="grid grid-cols-[80px_4fr_2fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 <div>ID</div>
-                <div className="text-center pt-px">Título</div>
-                <div className="text-center">Projeto</div>
-                <div className="text-center">Prioridade</div>
-                <div className="text-center">Criado em</div>
+                <div>Título</div>
+                <div>Projeto</div>
+                <div>Prioridade</div>
+                <div>Tipo</div>
+                <div className="text-center">Criado por</div>
+                <div>Criado em</div>
                 <div className="flex justify-end">Ações</div>
               </div>
               
               {/* Linhas da tabela */}
               <div className="divide-y divide-border">
                 {paginatedCases.map((testCase) => (
-                  <div 
-                    key={testCase.id} 
-                    className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                  <div
+                    key={testCase.id}
+                    className="grid grid-cols-[80px_4fr_2fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                     onClick={() => handleViewDetails(testCase)}
                   >
-                    <div className="flex items-center">
-                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">
+                    {/* ID */}
+                    <div>
+                      <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
                         {`CT-${testCase.sequence ? String(testCase.sequence).padStart(3, '0') : (testCase.id?.slice(0, 4) || '----')}`}
                       </span>
                     </div>
-                    
-                    <div className="flex items-start min-w-0 self-start justify-center text-center">
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium leading-tight text-foreground truncate">{testCase.title}</div>
-                        <div className="text-xs text-muted-foreground truncate">{testCase.description || 'Sem descrição'}</div>
+
+                    {/* Título + desc */}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-sm font-medium text-foreground truncate leading-tight">{testCase.title}</span>
+                        {Boolean(testCase.generated_by_ai) && (
+                          <span title="Gerado por IA"><Sparkles className="h-3 w-3 text-amber-400 flex-shrink-0" /></span>
+                        )}
                       </div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">{testCase.description || 'Sem descrição'}</div>
                     </div>
-                    
-                    <div className="flex items-center justify-center">
+
+                    {/* Projeto */}
+                    <div>
                       <ProjectDisplayField projectId={planProjectMap[testCase.plan_id] || ''} />
                     </div>
-                    
-                    <div className="flex items-center justify-center">
-                      <Badge variant="outline" className={priorityBadgeClass(testCase.priority)}>
-                        {priorityLabel(testCase.priority)}
-                      </Badge>
+
+                    {/* Prioridade */}
+                    <div>
+                      <PriorityTag priority={testCase.priority} />
                     </div>
-                    
-                    <div className="flex items-center justify-center text-xs text-muted-foreground">
+
+                    {/* Tipo */}
+                    <div className="text-xs text-muted-foreground">
+                      {testCaseTypeLabel(testCase.type)}
+                    </div>
+
+                    {/* Avatar */}
+                    <div className="flex justify-center">
+                      <UserAvatar userId={testCase.user_id} />
+                    </div>
+
+                    {/* Data */}
+                    <div className="text-xs text-muted-foreground">
                       {testCase.created_at ? new Date(testCase.created_at).toLocaleDateString('pt-BR') : 'N/A'}
                     </div>
-                    
-                    <div className="flex items-center gap-1 justify-end">
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-0.5 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"

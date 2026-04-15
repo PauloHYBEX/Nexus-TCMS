@@ -7,7 +7,7 @@ export const createProject = async (projectData: {
   slug: string;
   description?: string;
   color?: string;
-  user_id: string;
+  created_by: string;
 }): Promise<Project> => {
   const { data, error } = await supabase
     .from('projects')

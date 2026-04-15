@@ -669,7 +669,7 @@ export const createTestExecution = async (execution: Omit<TestExecution, 'id' | 
   try { await ensureWritableByPlanId(execution.plan_id); } catch (e) { console.warn(e); throw e; }
   const { data, error } = await supabase
     .from('test_executions')
-    .insert([execution])
+    .insert([{ ...execution, executed_at: new Date().toISOString() }])
     .select()
     .single();
 

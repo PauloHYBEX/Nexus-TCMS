@@ -77,6 +77,7 @@ export interface Requirement {
   status: 'open' | 'in_progress' | 'approved' | 'deprecated';
   created_at: Date;
   updated_at: Date;
+  sequence?: number;
 }
 
 export interface Defect {
@@ -91,6 +92,7 @@ export interface Defect {
   execution_id?: string | null;
   created_at: Date;
   updated_at: Date;
+  sequence?: number;
 }
 
 export interface Theme {
@@ -109,7 +111,7 @@ export interface Theme {
 export interface AIModel {
   id: string;
   name: string;
-  provider: 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'groq' | 'other';
+  provider: 'gemini' | 'openai' | 'anthropic' | 'ollama' | 'groq' | 'openrouter' | 'other';
   description: string;
   version: string;
   capabilities: string[];

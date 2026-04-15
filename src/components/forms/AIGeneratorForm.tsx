@@ -1,21 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
-import { Sparkles, Loader2, Zap, ChevronsUpDown, Check, FileText } from 'lucide-react';
+import { Sparkles, Loader2, Zap, FileText, FlaskConical, Play, Upload, AlertCircle } from 'lucide-react';
 import { getTestPlans, getTestCases, createTestPlan, createTestCase, createTestExecution } from '@/services/supabaseService';
 import { TestPlan, TestCase, AIModelTask, AIModel } from '@/types';
 import * as ModelControlService from '@/services/modelControlService';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { cn } from '@/lib/utils';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useAISettings } from '@/hooks/useAISettings';
 import { useProject } from '@/contexts/ProjectContext';
 
@@ -26,14 +21,13 @@ interface AIGeneratorFormProps {
 
 export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGeneratorFormProps) => {
   const { user } = useAuth();
-  const { settings, updateSettings } = useAISettings();
+  const { settings } = useAISettings();
   const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [cases, setCases] = useState<TestCase[]>([]);
   const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
-  const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [formData, setFormData] = useState({
     type: initialType,
     description: '',
@@ -41,7 +35,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     requirements: '',
     planId: '',
     caseId: '',
-    selectedModel: 'default'
+    selectedModel: 'auto'
   });
   const [file, setFile] = useState<File | null>(null);
 
@@ -70,6 +64,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
   const loadAvailableModels = () => {
     try {
       const config = ModelControlService.loadConfig();
+      // Show active models; mark which ones have a key configured
       const activeModels = config.models.filter(model => model.active);
       setAvailableModels(activeModels);
     } catch (error) {
@@ -79,9 +74,9 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
 
   // Aplicar modelo preferido salvo nas configurações quando os modelos estiverem disponíveis
   useEffect(() => {
-    const preferred = settings?.preferredModel || 'default';
+    const preferred = settings?.preferredModel || 'auto';
     setFormData(prev => {
-      const exists = preferred === 'default' || availableModels.some(m => m.id === preferred);
+      const exists = preferred === 'auto' || availableModels.some(m => m.id === preferred);
       if (!exists) return prev;
       if (prev.selectedModel === preferred) return prev;
       return { ...prev, selectedModel: preferred };
@@ -90,10 +85,20 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
 
   const providerRequiresApiKey = (provider?: string) => {
     if (!provider) return false;
-    return ['openai', 'anthropic', 'groq', 'gemini'].includes(provider);
+    return ['openai', 'anthropic', 'groq', 'gemini', 'openrouter'].includes(provider);
   };
 
-  const selectedModelObj = formData.selectedModel === 'default'
+  // Detect if a model has a key stored
+  const modelHasKey = (model: AIModel): boolean => {
+    if (model.provider === 'ollama') return true;
+    try {
+      const host = window.location.hostname;
+      const keys = JSON.parse(localStorage.getItem(`${host}_mcp_api_keys`) || localStorage.getItem('mcp_api_keys') || '{}');
+      return Boolean(keys[model.id] || model.apiKey);
+    } catch { return Boolean(model.apiKey); }
+  };
+
+  const selectedModelObj = (formData.selectedModel === 'auto' || formData.selectedModel === 'default')
     ? undefined
     : availableModels.find(m => m.id === formData.selectedModel);
 
@@ -168,20 +173,10 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     }
 
     try {
-      // Resolver modelo efetivo:
-      // 1) Se o usuário selecionou explicitamente, usa o selecionado
-      // 2) Caso contrário, usa o defaultModel da configuração ("base")
-      // 3) Fallback: mapeamento por tarefa
-      // 4) Fallback final: primeiro modelo ativo
-      const config = ModelControlService.loadConfig();
-      const modelId = (() => {
-        if (formData.selectedModel && formData.selectedModel !== 'default') return formData.selectedModel;
-        if (config?.defaultModel) return config.defaultModel;
-        const mapped = config?.tasks?.[taskType];
-        if (mapped) return mapped as string;
-        const firstActive = config?.models?.find(m => m.active)?.id;
-        return firstActive;
-      })();
+      // 'auto' → let executeTask use selectBestModelForTask internally
+      const modelId = (formData.selectedModel && formData.selectedModel !== 'auto' && formData.selectedModel !== 'default')
+        ? formData.selectedModel
+        : 'auto';
 
       const effectiveTotal = 1; // gerar apenas 1 item por vez neste formulário
       const results: any[] = [];
@@ -284,315 +279,222 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const TYPE_OPTIONS = [
+    { value: 'plan' as const, label: 'Plano de Teste', icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/40' },
+    { value: 'case' as const, label: 'Caso de Teste', icon: FlaskConical, color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/40' },
+    { value: 'execution' as const, label: 'Execução', icon: Play, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/40' },
+  ];
+
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5" />
-          Gerador de Testes com IA
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading} aria-describedby={lastError ? 'ai-error-details' : undefined}>
+    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+      {/* Top bar: project + file upload */}
+      <div className="flex items-center justify-between pb-3 border-b border-border/50">
+        <div>
           {currentProject?.name ? (
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary">Projeto: {currentProject.name}</Badge>
-            </div>
+            <Badge variant="secondary" className="gap-1.5 text-xs">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 inline-block" />
+              {currentProject.name}
+            </Badge>
           ) : (
-            <div className="text-sm text-amber-600">Selecione um projeto no topo antes de gerar.</div>
+            <span className="text-xs text-amber-500 flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              Selecione um projeto antes de gerar
+            </span>
           )}
-          <div>
-            <Label htmlFor="file-upload">Upload de Documento (Opcional)</Label>
-            <div className="flex items-center gap-4">
-              <Input
-                id="file-upload"
-                type="file"
-                accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls"
-                onChange={handleFileChange}
-                className="flex-1"
-              />
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <FileText className="h-4 w-4" />
-                .txt, .md, .doc, .docx, .pdf, .xlsx, .xls
-              </div>
-            </div>
-          </div>
-          <div>
-            <Label htmlFor="type">Tipo de Geração *</Label>
-            <Select value={formData.type} onValueChange={(value) => handleChange('type', value)} required>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="plan">Plano de Teste</SelectItem>
-                <SelectItem value="case">Caso de Teste</SelectItem>
-                <SelectItem value="execution">Execução de Teste</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        </div>
+        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors" title="Aceita .txt, .md, .doc, .docx, .pdf, .xlsx, .xls">
+          <Upload className="h-3.5 w-3.5" />
+          {file ? <span className="max-w-[140px] truncate">{file.name}</span> : 'Importar documento'}
+          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls" onChange={handleFileChange} />
+        </label>
+      </div>
 
-          <div>
-            <Label htmlFor="selectedModel" className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-blue-500" />
-              Modelo de IA
-              <Badge variant="outline" className="text-xs">Opcional</Badge>
-            </Label>
-            <Popover open={modelPickerOpen} onOpenChange={setModelPickerOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={modelPickerOpen}
-                  className="w-full justify-between"
-                >
-                  {formData.selectedModel === 'default' ? (
-                    'Modelo Padrão (Recomendado)'
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <span>{selectedModelObj?.name || 'Modelo selecionado'}</span>
-                      {selectedModelObj && (
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {selectedModelObj.provider}
-                        </Badge>
-                      )}
-                    </span>
-                  )}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                <Command>
-                  <CommandInput placeholder="Buscar modelo..." />
-                  <CommandList>
-                    <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
-                    <CommandGroup>
-                      <CommandItem
-                        key="default"
-                        value="default"
-                        onSelect={() => {
-                          handleChange('selectedModel', 'default');
-                          setModelPickerOpen(false);
-                        }}
-                      >
-                        <Check className={cn('mr-2 h-4 w-4', formData.selectedModel === 'default' ? 'opacity-100' : 'opacity-0')} />
-                        Modelo Padrão (Recomendado)
-                        <span
-                          className="ml-auto flex items-center gap-2"
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Checkbox
-                            aria-label="Definir como padrão"
-                            checked={(settings?.preferredModel || 'default') === 'default'}
-                            onCheckedChange={(checked) => {
-                              const isChecked = checked === true;
-                              if (isChecked) {
-                                updateSettings({ preferredModel: 'default' });
-                                toast({ title: 'Preferência salva', description: 'Modelo padrão do sistema selecionado.' });
-                              } else {
-                                // Manter como default; desmarcar não define outro modelo
-                                updateSettings({ preferredModel: 'default' });
-                              }
-                            }}
-                          />
-                          <span className="text-xs text-muted-foreground">Padrão</span>
-                        </span>
-                      </CommandItem>
-                      {availableModels.map(model => (
-                        <CommandItem
-                          key={model.id}
-                          value={`${model.name} ${model.provider}`}
-                          onSelect={() => {
-                            handleChange('selectedModel', model.id);
-                            setModelPickerOpen(false);
-                          }}
-                        >
-                          <Check className={cn('mr-2 h-4 w-4', formData.selectedModel === model.id ? 'opacity-100' : 'opacity-0')} />
-                          <span className="flex items-center gap-2">
-                            <span>{model.name}</span>
-                            <Badge variant="outline" className="text-xs capitalize">{model.provider}</Badge>
-                            {model.capabilities?.includes(
-                              formData.type === 'plan' ? 'test-plan-generation' : 
-                              formData.type === 'case' ? 'test-case-generation' : 
-                              'test-execution-generation'
-                            ) && (
-                              <Badge variant="outline" className="text-green-600 text-xs">Otimizado</Badge>
-                            )}
-                          </span>
-                          <span
-                            className="ml-auto flex items-center gap-2"
-                            onMouseDown={(e) => e.stopPropagation()}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Checkbox
-                              aria-label="Definir como padrão"
-                              checked={(settings?.preferredModel || 'default') === model.id}
-                              onCheckedChange={(checked) => {
-                                const isChecked = checked === true;
-                                if (isChecked) {
-                                  updateSettings({ preferredModel: model.id });
-                                  toast({ title: 'Preferência salva', description: `Modelo "${model.name}" definido como padrão.` });
-                                } else {
-                                  updateSettings({ preferredModel: 'default' });
-                                }
-                              }}
-                            />
-                            <span className="text-xs text-muted-foreground">Padrão</span>
-                          </span>
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-            <p className="text-sm text-gray-500 mt-1">
-              Escolha um modelo específico ou deixe em branco para usar o <strong>modelo base</strong> configurado no Painel de Modelos.
-            </p>
-            {selectedModelObj && providerRequiresApiKey(selectedModelObj.provider) && (
-              <p className="text-xs text-amber-600 mt-1">Este provedor requer uma chave de API configurada no Painel de Modelos.</p>
+      {/* Type selector pills */}
+      <div className="flex gap-2">
+        {TYPE_OPTIONS.map(({ value, label, icon: Icon, color, bg }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => handleChange('type', value)}
+            className={cn(
+              'flex items-center gap-1.5 flex-1 justify-center py-2 px-3 rounded-lg text-xs font-medium border transition-all',
+              formData.type === value ? `${bg} ${color}` : 'border-border/60 text-muted-foreground hover:border-primary/30 hover:text-foreground'
             )}
-          </div>
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
 
-          {formData.type === 'execution' && (
-            <>
-              <div>
-                <Label htmlFor="planId">Plano de Teste *</Label>
-                <Select value={formData.planId} onValueChange={(value) => handleChange('planId', value)} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um plano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((plan) => (
-                      <SelectItem key={plan.id} value={plan.id}>
-                        {plan.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+      {/* 2-column main body */}
+      <div className="grid grid-cols-2 gap-5">
 
-              <div>
-                <Label htmlFor="caseId">Caso de Teste *</Label>
-                <Select 
-                  value={formData.caseId} 
-                  onValueChange={(value) => handleChange('caseId', value)} 
-                  required
-                  disabled={!formData.planId}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um caso" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cases.map((testCase) => (
-                      <SelectItem key={testCase.id} value={testCase.id}>
-                        {testCase.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          )}
-
-          {formData.type === 'case' && (
-            <div>
-              <Label htmlFor="planId">Plano de Teste (Opcional)</Label>
-              <Select value={formData.planId} onValueChange={(value) => handleChange('planId', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um plano (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {plans.map((plan) => (
-                    <SelectItem key={plan.id} value={plan.id}>
-                      {plan.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
+        {/* LEFT — primary inputs */}
+        <div className="space-y-3">
           <div>
-            <Label htmlFor="description">
-              {formData.type === 'execution' 
-                ? 'Contexto da Execução *' 
-                : 'Descrição do Sistema/Funcionalidade *'
-              }
+            <Label className="text-xs font-medium mb-1.5 block">
+              {formData.type === 'execution' ? 'Contexto da Execução' : 'Descrição do Sistema / Funcionalidade'}{' '}
+              <span className="text-destructive">*</span>
             </Label>
             <Textarea
-              id="description"
               value={formData.description}
               onChange={(e) => handleChange('description', e.target.value)}
-              rows={4}
+              rows={formData.type === 'execution' ? 4 : 5}
+              className="text-sm resize-none"
               placeholder={
                 formData.type === 'execution'
-                  ? "Descreva o contexto da execução, ambiente de teste, etc."
-                  : "Descreva o sistema ou funcionalidade que será testada"
+                  ? 'Descreva o contexto e ambiente de execução...'
+                  : 'Descreva o sistema ou funcionalidade que será testada'
               }
               required
             />
           </div>
 
-          <div>
-            <Label htmlFor="context">Contexto Adicional</Label>
-            <Textarea
-              id="context"
-              value={formData.context}
-              onChange={(e) => handleChange('context', e.target.value)}
-              rows={3}
-              placeholder="Forneça informações adicionais sobre o contexto, tecnologias utilizadas, etc."
-            />
-          </div>
-
           {formData.type !== 'execution' && (
             <div>
-              <Label htmlFor="requirements">Requisitos Específicos</Label>
+              <Label className="text-xs font-medium mb-1.5 block">Requisitos / Cenários a Cobrir</Label>
               <Textarea
-                id="requirements"
                 value={formData.requirements}
                 onChange={(e) => handleChange('requirements', e.target.value)}
                 rows={3}
-                placeholder="Liste requisitos específicos ou cenários que devem ser cobertos"
+                className="text-sm resize-none"
+                placeholder="Liste requisitos ou cenários específicos a serem cobertos..."
               />
             </div>
           )}
 
-          <div className="flex justify-end">
-            <Button 
-              type="submit" 
-              disabled={loading || !currentProject?.id || (formData.type === 'execution' && (!formData.planId || !formData.caseId))} 
-              className="min-w-[200px]"
-              aria-busy={loading}
-              aria-live="polite"
-              aria-label={loading ? 'Gerando com IA, aguarde' : 'Gerar com IA'}
-              role={loading ? 'status' : undefined}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Gerar com IA
-                </>
-              )}
-            </Button>
+          {formData.type === 'execution' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">
+                  Plano <span className="text-destructive">*</span>
+                </Label>
+                <Select value={formData.planId} onValueChange={(v) => handleChange('planId', v)} required>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Selecionar plano" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {plans.map((p) => (
+                      <SelectItem key={p.id} value={p.id} className="text-xs">{p.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1.5 block">
+                  Caso <span className="text-destructive">*</span>
+                </Label>
+                <Select value={formData.caseId} onValueChange={(v) => handleChange('caseId', v)} required disabled={!formData.planId}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue placeholder="Selecionar caso" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cases.map((c) => (
+                      <SelectItem key={c.id} value={c.id} className="text-xs">{c.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+
+          {formData.type === 'case' && (
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">
+                Vincular ao Plano <span className="text-muted-foreground">(opcional)</span>
+              </Label>
+              <Select value={formData.planId} onValueChange={(v) => handleChange('planId', v)}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue placeholder="Sem plano associado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {plans.map((p) => (
+                    <SelectItem key={p.id} value={p.id} className="text-xs">{p.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT — context, model, action */}
+        <div className="space-y-3">
+          <div>
+            <Label className="text-xs font-medium mb-1.5 block">Contexto Adicional</Label>
+            <Textarea
+              value={formData.context}
+              onChange={(e) => handleChange('context', e.target.value)}
+              rows={4}
+              className="text-sm resize-none"
+              placeholder="Tecnologias, padrões, restrições, ambiente..."
+            />
           </div>
+
+          <div>
+            <Label className="text-xs font-medium mb-1.5 flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              Modelo de IA
+              <span className="text-muted-foreground font-normal">(opcional)</span>
+            </Label>
+            <Select value={formData.selectedModel} onValueChange={(v) => handleChange('selectedModel', v)}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto" className="text-xs">
+                  <span className="flex items-center gap-1.5">✨ Automático (seleção inteligente)</span>
+                </SelectItem>
+                {availableModels.map((m) => {
+                  const task = formData.type === 'plan' ? 'test-plan-generation' : formData.type === 'case' ? 'test-case-generation' : 'test-execution-generation';
+                  const hasCap = m.capabilities?.includes(task);
+                  const hasKey = modelHasKey(m);
+                  return (
+                    <SelectItem key={m.id} value={m.id} className="text-xs">
+                      {m.name}{hasCap && hasKey ? ' ✓' : hasCap && !hasKey ? ' ⚠' : ''}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+            {selectedModelObj && providerRequiresApiKey(selectedModelObj.provider) && (
+              <p className="text-xs text-amber-500 mt-1">⚠ Requer API key no Painel de Modelos</p>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            disabled={loading || !currentProject?.id || (formData.type === 'execution' && (!formData.planId || !formData.caseId))}
+            className="w-full"
+            aria-busy={loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 mr-2" />
+                Gerar com IA
+              </>
+            )}
+          </Button>
+
           {lastError && (
             <div
               id="ai-error-details"
               role="alert"
-              className="mt-2 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+              className="rounded-md border border-destructive/30 bg-destructive/10 p-2.5 text-xs text-destructive"
             >
-              <p className="font-medium">Falha na geração/validação do schema</p>
-              <pre className="whitespace-pre-wrap break-words mt-1">{lastError}</pre>
+              <p className="font-medium flex items-center gap-1">
+                <AlertCircle className="h-3.5 w-3.5" /> Falha na geração
+              </p>
+              <p className="mt-1 break-words opacity-80 line-clamp-4">{lastError}</p>
             </div>
           )}
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      </div>
+    </form>
   );
 };

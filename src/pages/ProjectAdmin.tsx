@@ -73,7 +73,7 @@ export const ProjectAdmin: React.FC = () => {
         slug,
         description: form.description.trim() || undefined,
         color: form.color,
-        user_id: user.id,
+        created_by: user.id,
       });
       await refreshProjects();
       toast({ title: 'Projeto criado', description: `"${proj.name}" criado com sucesso.` });

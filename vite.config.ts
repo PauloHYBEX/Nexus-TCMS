@@ -8,6 +8,16 @@ export default defineConfig(({ mode }) => ({
     host: "::",
     port: 5173,
     strictPort: false,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
+    },
   },
   plugins: [
     react(),

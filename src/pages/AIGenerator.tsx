@@ -357,7 +357,7 @@ export const AIGenerator = () => {
       )}
       {/* Modal de Criação (Formulários) */}
       <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) setSearchParams({}); }}>
-        <DialogContent className="max-w-4xl overflow-x-hidden" aria-describedby="ai-create-desc">
+        <DialogContent className="max-w-3xl" aria-describedby="ai-create-desc">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {generationType === 'plan' ? <FileText className="h-5 w-5" /> : generationType === 'case' ? <TestTube className="h-5 w-5" /> : <PlayCircle className="h-5 w-5" />}
@@ -369,13 +369,11 @@ export const AIGenerator = () => {
               Criar artefatos de teste com IA
             </DialogDescription>
           </DialogHeader>
-          <div className="pt-2">
             {(batchMode === 'batch' && (generationType === 'plan' || generationType === 'case')) ? (
               <AIBatchGeneratorForm onSuccess={handleGenerationSuccess} type={generationType} />
             ) : (
               <AIGeneratorForm onSuccess={handleGenerationSuccess} initialType={generationType} />
             )}
-          </div>
         </DialogContent>
       </Dialog>
       <AIBatchModal
@@ -390,7 +388,7 @@ export const AIGenerator = () => {
 
       {/* Modal para Plano Único com Múltiplos Casos */}
       <Dialog open={showPlanWithCasesModal} onOpenChange={setShowPlanWithCasesModal}>
-        <DialogContent className="max-w-3xl overflow-x-hidden" aria-describedby="plan-with-cases-desc">
+        <DialogContent className="max-w-3xl" aria-describedby="plan-with-cases-desc">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Files className="h-5 w-5" />
@@ -400,7 +398,6 @@ export const AIGenerator = () => {
               Cole a tabela/descrição. A IA consolidará um plano e gerará vários casos de teste.
             </DialogDescription>
           </DialogHeader>
-          <div className="pt-2">
             <AIBatchGeneratorForm
               type="plan"
               mode="plan-with-cases"
@@ -409,7 +406,6 @@ export const AIGenerator = () => {
                 navigate('/plans');
               }}
             />
-          </div>
         </DialogContent>
       </Dialog>
 

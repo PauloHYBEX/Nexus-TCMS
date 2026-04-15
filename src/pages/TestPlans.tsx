@@ -6,7 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, FileText, Calendar, Sparkles, Grid, List, Download, Search, Filter, ArrowUpDown, Edit, Trash2 } from 'lucide-react';
+import { Plus, FileText, Calendar, Sparkles, Download, Search, ListFilter, ArrowUpDown, Edit, Trash2 } from 'lucide-react';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { UserAvatar } from '@/components/ui/UserAvatar';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { getTestPlans, deleteTestPlan, getPlanLinkedCounts } from '@/services/supabaseService';
 import { TestPlan } from '@/types';
@@ -14,6 +17,7 @@ import { TestPlanForm } from '@/components/forms/TestPlanForm';
 // Removido seletor de projeto local: o controle é feito globalmente no Dashboard
 import { ProjectDisplayField } from '@/components/ProjectDisplayField';
 import { StandardButton } from '@/components/StandardButton';
+import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { useToast } from '@/hooks/use-toast';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -73,6 +77,7 @@ export const TestPlans = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<TestPlan | null>(null);
   const [linkedCounts, setLinkedCounts] = useState<{ testCaseCount: number; executionCount: number } | null>(null);
+  const [planStats, setPlanStats] = useState<Record<string, { cases: number; execs: number }>>({});
 
   // Listener para broadcast de troca de projeto
   useEffect(() => {
@@ -82,22 +87,32 @@ export const TestPlans = () => {
   }, []);
   
   // Carregar planos reais do Supabase
+  const loadPlanStats = (plansData: TestPlan[]) => {
+    if (!user || plansData.length === 0) return;
+    Promise.all(
+      plansData.map(p => getPlanLinkedCounts(user.id, p.id).then(c => ({ id: p.id, cases: c.testCaseCount, execs: c.executionCount })))
+    ).then(results => {
+      const map: Record<string, { cases: number; execs: number }> = {};
+      results.forEach(r => { map[r.id] = { cases: r.cases, execs: r.execs }; });
+      setPlanStats(map);
+    }).catch(() => {});
+  };
+
   const loadPlans = async () => {
     if (!user) return;
     try {
       setLoading(true);
+      let data: TestPlan[];
       if (currentProject?.id) {
-        const data = await getTestPlans(user.id, currentProject.id);
-        setPlans(data);
+        data = await getTestPlans(user.id, currentProject.id);
       } else {
-        // Agregar SOMENTE projetos ATIVOS quando "Todos"
         const active = (projects || []).filter(p => p.status === 'active');
-        if (active.length === 0) setPlans([]);
-        else {
-          const lists = await Promise.all(active.map(p => getTestPlans(user.id, p.id)));
-          setPlans(lists.flat());
-        }
+        if (active.length === 0) { setPlans([]); return; }
+        const lists = await Promise.all(active.map(p => getTestPlans(user.id, p.id)));
+        data = lists.flat();
       }
+      setPlans(data);
+      loadPlanStats(data);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
       toast({ title: 'Erro', description: 'Falha ao carregar planos de teste.', variant: 'destructive' });
@@ -238,19 +253,11 @@ export const TestPlans = () => {
   // IDs agora exibem apenas numeração (ex.: PT-001). Sem nomenclatura de projeto.
 
   // Classes de badge por status (conhecidos) com fallback
-  const statusClasses = (status: string) => (
-    status === 'active'
-      ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-400/15 dark:text-green-300 dark:border-transparent dark:ring-1 dark:ring-green-400/25'
-      : status === 'review'
-      ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-400/15 dark:text-yellow-300 dark:border-transparent dark:ring-1 dark:ring-yellow-400/25'
-      : status === 'approved'
-      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-400/15 dark:text-blue-300 dark:border-transparent dark:ring-1 dark:ring-blue-400/25'
-      : status === 'archived'
-      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-400/15 dark:text-red-300 dark:border-transparent dark:ring-1 dark:ring-red-400/25'
-      : status === 'draft'
-      ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
-      : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-slate-400/15 dark:text-slate-300 dark:border-transparent dark:ring-1 dark:ring-slate-400/25'
-  );
+  const planProgress = (planId: string) => {
+    const s = planStats[planId];
+    if (!s || s.cases === 0) return 0;
+    return Math.min(100, Math.round((s.execs / s.cases) * 100));
+  };
 
   // Derived pagination data
   const totalItems = filteredAndSortedPlans.length;
@@ -495,7 +502,7 @@ export const TestPlans = () => {
     <div ref={containerRef} className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="pl-24">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">Planos de Teste</h1>
           <p className="text-sm text-muted-foreground">Gerencie seus planos de teste</p>
         </div>
@@ -517,92 +524,60 @@ export const TestPlans = () => {
         </StandardButton>
       </div>
 
-      {/* Search and Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             value={searchTerm}
             onChange={(e) => handleSearchTermChange(e.target.value)}
             placeholder="Buscar por número, título ou descrição"
-            className="pl-10 h-10"
+            className="pl-9 h-9 bg-muted/20 border-border/60"
           />
         </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Seletor de projeto removido: seleção global pelo Dashboard */}
-          {/* View Mode Toggle */}
-          <div className="flex rounded-lg border border-border overflow-hidden">
-            <Button
-              variant={viewMode === 'cards' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('cards')}
-              className={viewMode === 'cards' ? 'bg-brand text-brand-foreground' : ''}
-            >
-              <Grid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-              className={viewMode === 'list' ? 'bg-brand text-brand-foreground' : ''}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
-          
-          {/* Sort Dropdown */}
+        <div className="flex items-center gap-1 shrink-0">
+          <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Ordenar
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">Ordenar</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>
-                Mais recente
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>
-                Mais antigo
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>
-                Título (A-Z)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>
-                Título (Z-A)
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>Mais recente</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>Mais antigo</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>Título (A-Z)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>Título (Z-A)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Filter Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                {filterStatus === 'all' ? 'Todos' : `Status: ${getLabelFor(filterStatus)}`}
+              <Button variant="ghost" size="sm" className={`h-9 gap-1.5 px-3 border font-normal ${
+                filterStatus !== 'all'
+                  ? 'border-brand/50 text-brand bg-brand/5 hover:bg-brand/10'
+                  : 'border-border/60 hover:border-border'
+              }`}>
+                <ListFilter className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">
+                  {filterStatus === 'all' ? 'Todos' : getLabelFor(filterStatus)}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setFilterStatus('all')}>
-                Todos
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setFilterStatus('all')}>Todos</DropdownMenuItem>
               <DropdownMenuSeparator />
               {options.map(opt => (
-                <DropdownMenuItem key={opt.value} onClick={() => setFilterStatus(opt.value)}>
-                  {opt.label}
-                </DropdownMenuItem>
+                <DropdownMenuItem key={opt.value} onClick={() => setFilterStatus(opt.value)}>{opt.label}</DropdownMenuItem>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
-          
-          {/* Export Dropdown */}
           {plans.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline text-sm">Exportar</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -636,50 +611,61 @@ export const TestPlans = () => {
         {plans.length > 0 ? (
           viewMode === 'cards' ? (
             <div ref={listCardRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredAndSortedPlans.length > 0 ? paginatedPlans.map((plan) => (
+              {filteredAndSortedPlans.length > 0 ? paginatedPlans.map((plan) => {
+                const pct = planProgress(plan.id);
+                const stats = planStats[plan.id];
+                return (
                 <Card
                   key={plan.id}
-                  className="border border-border/50 cursor-pointer card-hover"
+                  className="border border-border/50 cursor-pointer card-hover flex flex-col"
                   onClick={() => handleViewDetails(plan)}
                 >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">
-                          {`PT-${String(plan.sequence ?? '001').padStart(3, '0')}`}
+                  <CardHeader className="p-4 pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded flex-shrink-0 mt-0.5">
+                          {`PT-${String(plan.sequence ?? '').padStart(3, '0')}`}
                         </span>
-                        <CardTitle className="text-base line-clamp-2 leading-tight min-w-0">
+                        <CardTitle className="text-sm font-semibold line-clamp-2 leading-snug min-w-0">
                           {plan.title}
                         </CardTitle>
                       </div>
-                      {plan.generated_by_ai && (
-                        <Badge variant="secondary" className="flex items-center gap-1 ml-2 flex-shrink-0">
-                          <Sparkles className="h-3 w-3" />
-                          IA
-                        </Badge>
+                      {Boolean(plan.generated_by_ai) && (
+                        <span title="Gerado por IA"><Sparkles className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" /></span>
                       )}
                     </div>
+                    <div className="mt-1.5">
+                      <StatusDot status={plan.status} label={getLabelFor(plan.status)} />
+                    </div>
                   </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-sm text-muted-foreground line-clamp-3 mb-4">
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                    <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
                       {plan.description}
                     </p>
-                    <div className="flex items-center justify-between">
+                    {/* Progress */}
+                    <div className="mb-3 space-y-1">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>Progresso</span>
+                        <span>{stats ? `${stats.execs}/${stats.cases} casos` : '—'}</span>
+                      </div>
+                      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${pct}%`, backgroundColor: pct > 0 ? (currentProject?.color || 'hsl(var(--brand))') : undefined }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-auto flex items-center justify-between">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {plan.updated_at.toLocaleDateString('pt-BR')}
+                        {plan.created_at.toLocaleDateString('pt-BR')}
                       </div>
-                      <StandardButton 
-                        variant="outline" 
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); handleViewDetails(plan); }}
-                      >
-                        Ver Detalhes
-                      </StandardButton>
+                      <UserAvatar userId={plan.user_id} />
                     </div>
                   </CardContent>
                 </Card>
-              )) : (
+              );
+              }) : (
                 <div className="col-span-full text-center py-12">
                   <p className="text-muted-foreground">Nenhum resultado encontrado com os filtros atuais.</p>
                 </div>
@@ -691,84 +677,100 @@ export const TestPlans = () => {
               {filteredAndSortedPlans.length > 0 ? (
                 <div ref={listCardRef} className="bg-card border border-border rounded-lg overflow-hidden">
                   {/* Header da tabela */}
-                  <div ref={listHeaderRef} className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  <div ref={listHeaderRef} className="grid grid-cols-[80px_4fr_2fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     <div>ID</div>
-                    <div className="text-center pt-px">Título</div>
-                    <div className="text-center">Projeto</div>
-                    <div className="text-center">Status</div>
-                    <div className="text-center">Criado em</div>
+                    <div>Título</div>
+                    <div>Projeto</div>
+                    <div>Status</div>
+                    <div>Progresso</div>
+                    <div className="text-center">Criado por</div>
+                    <div>Criado em</div>
                     <div className="flex justify-end">Ações</div>
                   </div>
-                  
+
                   {/* Linhas da tabela */}
-                  <div className="divide-y divide-border">
-                    {paginatedPlans.map((plan) => (
-                      <div 
-                        key={plan.id} 
-                        className="grid grid-cols-[80px_1fr_120px_120px_120px_100px] items-start gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
-                        onClick={() => handleViewDetails(plan)}
-                      >
-                        <div className="flex items-center">
-                          <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">
-                            {`PT-${String(plan.sequence ?? '001').padStart(3, '0')}`}
-                          </span>
-                        </div>
-                        
-                        <div className="flex items-start min-w-0 gap-2 self-start justify-center text-center">
-                          <div className="min-w-0">
-                            <div className="text-sm font-medium leading-tight text-foreground truncate">{plan.title}</div>
-                            <div className="text-xs text-muted-foreground truncate">{plan.description}</div>
+                  <div className="divide-y divide-border/60">
+                    {paginatedPlans.map((plan) => {
+                      const pct = planProgress(plan.id);
+                      const stats = planStats[plan.id];
+                      return (
+                        <div
+                          key={plan.id}
+                          className="grid grid-cols-[80px_4fr_2fr_2fr_2fr_80px_100px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={() => handleViewDetails(plan)}
+                        >
+                          {/* ID */}
+                          <div>
+                            <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
+                              {`PT-${String(plan.sequence ?? '').padStart(3, '0')}`}
+                            </span>
                           </div>
-                          {plan.generated_by_ai && (
-                            <Badge variant="secondary" className="flex-shrink-0 mt-[1px]">
-                              <Sparkles className="h-3 w-3 mr-1" />
-                              IA
-                            </Badge>
-                          )}
+
+                          {/* Título + desc */}
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-sm font-medium text-foreground truncate leading-tight">{plan.title}</span>
+                              {Boolean(plan.generated_by_ai) && (
+                                <span title="Gerado por IA"><Sparkles className="h-3 w-3 text-amber-400 flex-shrink-0" /></span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate mt-0.5">{plan.description}</div>
+                          </div>
+
+                          {/* Projeto */}
+                          <div>
+                            <ProjectDisplayField projectId={plan.project_id} />
+                          </div>
+
+                          {/* Status */}
+                          <div>
+                            <StatusDot status={plan.status} label={getLabelFor(plan.status)} />
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{stats ? `${stats.execs}/${stats.cases}` : '—'}</span>
+                              <span>{stats ? `${pct}%` : ''}</span>
+                            </div>
+                            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                className="h-full rounded-full transition-all"
+                                style={{ width: `${pct}%`, backgroundColor: pct > 0 ? (currentProject?.color || 'hsl(var(--brand))') : undefined }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Creator avatar */}
+                          <div className="flex justify-center">
+                            <UserAvatar userId={plan.user_id} />
+                          </div>
+
+                          {/* Data */}
+                          <div className="text-xs text-muted-foreground">
+                            {plan.created_at.toLocaleDateString('pt-BR')}
+                          </div>
+
+                          {/* Ações */}
+                          <div className="flex items-center gap-0.5 justify-end">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
+                              onClick={(e) => { e.stopPropagation(); handleEdit(plan); }}
+                              disabled={!currentProject || currentProject.status !== 'active'}
+                              title={!currentProject ? 'Selecione um projeto ativo para editar planos' : (currentProject.status !== 'active' ? 'Projeto não ativo — edição desabilitada' : undefined)}
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); handleRequestDelete(plan); }}
+                              disabled={!currentProject || isProjectInactive}
+                              title={!currentProject ? 'Selecione um projeto ativo para excluir planos' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
-                        
-                        <div className="flex items-center justify-center">
-                          <ProjectDisplayField projectId={plan.project_id} />
-                        </div>
-                        
-                        <div className="flex items-center justify-center">
-                          <Badge variant="outline" className={statusClasses(plan.status)}>
-                            {getLabelFor(plan.status)}
-                          </Badge>
-                        </div>
-                        
-                        <div className="flex items-center text-sm text-muted-foreground justify-center">
-                          {plan.created_at.toLocaleDateString('pt-BR')}
-                        </div>
-                        
-                        <div className="flex items-center gap-1 justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(plan);
-                            }}
-                            disabled={!currentProject || currentProject.status !== 'active'}
-                            title={!currentProject ? 'Selecione um projeto ativo para editar planos' : (currentProject.status !== 'active' ? 'Projeto não ativo — edição desabilitada' : undefined)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRequestDelete(plan);
-                            }}
-                            disabled={!currentProject || isProjectInactive}
-                            title={!currentProject ? 'Selecione um projeto ativo para excluir planos' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ) : (

@@ -1,0 +1,430 @@
+﻿import fs from 'fs/promises';
+import path from 'path';
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import multer from 'multer';
+import { fileURLToPath } from 'url';
+import { randomUUID } from 'crypto';
+import { getClient, db, query } from './db.js';
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = path.resolve(__dirname, '..');
+const uploadsDir = path.join(rootDir, 'public', 'uploads');
+const JWT_SECRET = process.env.LOCAL_AUTH_SECRET || 'nexus-local-secret';
+const PORT = Number(process.env.API_PORT || 4000);
+
+await fs.mkdir(uploadsDir, { recursive: true });
+
+const app = express();
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use('/uploads', express.static(uploadsDir));
+
+const storage = multer.diskStorage({
+  destination: async (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    const safe = Date.now() + '-' + file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    cb(null, safe);
+  },
+});
+const upload = multer({ storage });
+
+const ALLOWED_TABLES = new Set([
+  'profiles', 'user_permissions', 'projects', 'test_plans', 'test_cases',
+  'test_executions', 'requirements', 'requirements_cases', 'defects',
+  'activity_logs', 'user_settings', 'notifications', 'notification_preferences',
+  'profile_function_roles', 'role_requests',
+]);
+
+const BOOL_PERM_COLS = [
+  'can_manage_users','can_manage_projects','can_delete_projects','can_manage_plans',
+  'can_manage_cases','can_manage_executions','can_view_reports','can_use_ai',
+  'can_access_model_control','can_access_admin_menu','can_configure_ai_models',
+  'can_test_ai_connections','can_manage_ai_templates','can_select_ai_models',
+];
+
+function signToken(user) {
+  return jwt.sign({ sub: user.id, email: user.email, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+}
+
+function parseToken(req) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return null;
+  try { return jwt.verify(token, JWT_SECRET); } catch { return null; }
+}
+
+async function getCurrentUser(req) {
+  const payload = parseToken(req);
+  if (!payload?.sub) return null;
+  const { rows } = query('SELECT id, email, display_name, role, avatar_url, active FROM profiles WHERE id = ? AND active = 1', [payload.sub]);
+  return rows[0] || null;
+}
+
+async function requireUser(req, res, next) {
+  try {
+    const user = await getCurrentUser(req);
+    if (!user) return res.status(401).json({ error: { message: 'Nao autenticado.' } });
+    req.user = user;
+    next();
+  } catch (error) { next(error); }
+}
+
+function buildWhere(filters = [], params = []) {
+  const clauses = [];
+  for (const filter of filters) {
+    const { type, column, value } = filter;
+    if (!column || !/^[_a-zA-Z][_a-zA-Z0-9]*$/.test(column)) continue;
+    if (type === 'eq') {
+      params.push(value);
+      clauses.push(column + ' = \$' + params.length);
+    } else if (type === 'neq') {
+      params.push(value);
+      clauses.push(column + ' <> \$' + params.length);
+    } else if (type === 'gte') {
+      params.push(value);
+      clauses.push(column + ' >= \$' + params.length);
+    } else if (type === 'lte') {
+      params.push(value);
+      clauses.push(column + ' <= \$' + params.length);
+    } else if (type === 'in' && Array.isArray(value) && value.length > 0) {
+      const placeholders = value.map((v) => { params.push(v); return '\$' + params.length; });
+      clauses.push(column + ' IN (' + placeholders.join(', ') + ')');
+    } else if (type === 'match' && value && typeof value === 'object') {
+      for (const [key, val] of Object.entries(value)) {
+        if (!/^[_a-zA-Z][_a-zA-Z0-9]*$/.test(key)) continue;
+        params.push(val);
+        clauses.push(key + ' = \$' + params.length);
+      }
+    }
+  }
+  return clauses.length ? ' WHERE ' + clauses.join(' AND ') : '';
+}
+
+function normalizeRows(table, rows) {
+  if (table === 'user_permissions') {
+    return rows.map((row) => {
+      const norm = { ...row };
+      for (const col of BOOL_PERM_COLS) {
+        if (col in norm) norm[col] = norm[col] === 1 || norm[col] === true;
+      }
+      return norm;
+    });
+  }
+  if (table === 'profiles') {
+    return rows.map((row) => ({
+      ...row,
+      active: row.active === 1 || row.active === true,
+      tags: typeof row.tags === 'string'
+        ? (() => { try { return JSON.parse(row.tags); } catch { return []; } })()
+        : (Array.isArray(row.tags) ? row.tags : []),
+    }));
+  }
+  if (table === 'test_cases') {
+    return rows.map((row) => ({
+      ...row,
+      steps: typeof row.steps === 'string'
+        ? (() => { try { return JSON.parse(row.steps); } catch { return []; } })()
+        : (Array.isArray(row.steps) ? row.steps : []),
+    }));
+  }
+  if (table === 'activity_logs') {
+    return rows.map((row) => ({
+      ...row,
+      metadata: typeof row.metadata === 'string'
+        ? (() => { try { return JSON.parse(row.metadata); } catch { return {}; } })()
+        : (row.metadata && typeof row.metadata === 'object' ? row.metadata : {}),
+    }));
+  }
+  return rows;
+}
+
+function serializeForDb(table, values) {
+  if (!values) return values;
+  if (table === 'test_cases' && Array.isArray(values.steps)) {
+    return { ...values, steps: JSON.stringify(values.steps) };
+  }
+  if (table === 'profiles' && Array.isArray(values.tags)) {
+    return { ...values, tags: JSON.stringify(values.tags) };
+  }
+  return values;
+}
+
+const _tableColsCache = new Map();
+function getTableCols(table) {
+  if (!_tableColsCache.has(table)) {
+    try {
+      const rows = db.prepare('PRAGMA table_info(' + table + ')').all();
+      _tableColsCache.set(table, new Set(rows.map(r => r.name)));
+    } catch { _tableColsCache.set(table, new Set()); }
+  }
+  return _tableColsCache.get(table);
+}
+function filterToTableCols(table, obj) {
+  const allowed = getTableCols(table);
+  if (!allowed.size) return obj;
+  const out = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (allowed.has(k)) out[k] = v;
+  }
+  return out;
+}
+
+// Auto-migrate existing databases: add columns that may be missing
+{
+  const migrations = [
+    'ALTER TABLE test_plans ADD COLUMN sequence INTEGER',
+    'ALTER TABLE test_plans ADD COLUMN user_id TEXT',
+    'ALTER TABLE test_plans ADD COLUMN generated_by_ai INTEGER DEFAULT 0',
+    'ALTER TABLE test_cases ADD COLUMN sequence INTEGER',
+    'ALTER TABLE test_cases ADD COLUMN user_id TEXT',
+    'ALTER TABLE test_cases ADD COLUMN generated_by_ai INTEGER DEFAULT 0',
+    'ALTER TABLE test_executions ADD COLUMN sequence INTEGER',
+    'ALTER TABLE test_executions ADD COLUMN user_id TEXT',
+    'ALTER TABLE test_executions ADD COLUMN generated_by_ai INTEGER DEFAULT 0',
+    'ALTER TABLE defects ADD COLUMN sequence INTEGER',
+    'ALTER TABLE requirements ADD COLUMN sequence INTEGER',
+    'ALTER TABLE requirements ADD COLUMN user_id TEXT',
+    'ALTER TABLE requirements ADD COLUMN generated_by_ai INTEGER DEFAULT 0',
+    'ALTER TABLE profiles ADD COLUMN github_url TEXT',
+    'ALTER TABLE profiles ADD COLUMN google_url TEXT',
+    'ALTER TABLE profiles ADD COLUMN website_url TEXT',
+    'ALTER TABLE profiles ADD COLUMN tags TEXT DEFAULT \'[]\'',
+    'ALTER TABLE profiles ADD COLUMN bio TEXT',
+    'ALTER TABLE defects ADD COLUMN user_id TEXT',
+    'ALTER TABLE activity_logs ADD COLUMN context TEXT',
+    'ALTER TABLE activity_logs ADD COLUMN metadata TEXT DEFAULT \'{}\'',
+  ];
+  for (const sql of migrations) {
+    try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }
+  }
+}
+
+app.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+app.post('/api/auth/login', async (req, res, next) => {
+  try {
+    const { email, password } = req.body || {};
+    const { rows } = query('SELECT * FROM profiles WHERE email = ? AND active = 1', [String(email || '').toLowerCase().trim()]);
+    const user = rows[0];
+    if (!user) return res.status(401).json({ error: { message: 'Credenciais invalidas.' } });
+    const ok = await bcrypt.compare(String(password || ''), user.password_hash);
+    if (!ok) return res.status(401).json({ error: { message: 'Credenciais invalidas.' } });
+    const token = signToken(user);
+    res.json({ token, user: { id: user.id, email: user.email, role: user.role, user_metadata: { full_name: user.display_name || '' } } });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/auth/register', async (req, res, next) => {
+  try {
+    const { email, password, name } = req.body || {};
+    const passwordHash = await bcrypt.hash(String(password || ''), 10);
+    const newId = randomUUID();
+    const inserted = query(
+      'INSERT INTO profiles (id, email, password_hash, display_name, role) VALUES (?, ?, ?, ?, ?) RETURNING id, email, display_name',
+      [newId, String(email || '').toLowerCase().trim(), passwordHash, String(name || ''), 'viewer']
+    );
+    const user = inserted.rows[0];
+    query('INSERT INTO user_permissions (user_id) VALUES (?) ON CONFLICT (user_id) DO NOTHING', [user.id]);
+    const token = signToken({ id: user.id, email: user.email, role: 'viewer' });
+    res.json({ token, user: { id: user.id, email: user.email, role: 'viewer', user_metadata: { full_name: user.display_name || '' } } });
+  } catch (error) { next(error); }
+});
+
+app.get('/api/auth/session', async (req, res, next) => {
+  try {
+    const user = await getCurrentUser(req);
+    if (!user) return res.json({ session: null });
+    res.json({ session: { user: { id: user.id, email: user.email, role: user.role, user_metadata: { full_name: user.display_name || '' } } } });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/auth/reset-password', (_req, res) => {
+  res.json({ ok: true, message: 'Recuperacao de senha nao suportada no modo local.' });
+});
+
+app.post('/api/auth/update-password', requireUser, async (req, res, next) => {
+  try {
+    const passwordHash = await bcrypt.hash(String(req.body?.password || ''), 10);
+    query('UPDATE profiles SET password_hash = ? WHERE id = ?', [passwordHash, req.user.id]);
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/db/query', requireUser, async (req, res, next) => {
+  try {
+    const { table, filters = [], order, limit, columns = '*', options = {} } = req.body || {};
+    if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: { message: 'Tabela nao permitida.' } });
+    const params = [];
+    const whereSql = buildWhere(filters, params);
+    const orderSql = order?.column && /^[_a-zA-Z][_a-zA-Z0-9]*$/.test(order.column)
+      ? ' ORDER BY ' + order.column + (order.ascending === false ? ' DESC' : ' ASC')
+      : '';
+    const limitSql = Number.isFinite(limit) ? ' LIMIT ' + Number(limit) : '';
+    const selectSql = options?.head && options?.count ? 'COUNT(*) AS count' : (columns === '*' ? '*' : columns);
+    const result = query('SELECT ' + selectSql + ' FROM ' + table + whereSql + orderSql + limitSql, params);
+    const rows = normalizeRows(table, result.rows);
+    const count = options?.count ? (options.head ? (rows[0]?.count || 0) : rows.length) : null;
+    res.json({ data: options?.head ? null : rows, error: null, count });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/db/mutate', requireUser, async (req, res, next) => {
+  try {
+    const { table, action, values, filters = [], options = {} } = req.body || {};
+    if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: { message: 'Tabela nao permitida.' } });
+    const client = getClient();
+    try {
+      let result;
+      const SEQ_TABLES = new Set(['test_plans', 'test_cases', 'test_executions', 'requirements', 'defects']);
+      if (action === 'insert' || action === 'upsert') {
+        const rawRows = Array.isArray(values) ? values : [values];
+        if (!rawRows.length) return res.json({ data: [], error: null });
+        const rows = rawRows.map((row) => {
+          const r = serializeForDb(table, row);
+          const base = r.id ? r : { id: randomUUID(), ...r };
+          const filtered = filterToTableCols(table, base);
+          if (SEQ_TABLES.has(table) && filtered.sequence == null) {
+            const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM ' + table, []);
+            filtered.sequence = mx[0]?.next || 1;
+          }
+          return filtered;
+        });
+        const cols = Object.keys(rows[0]);
+        const params = [];
+        const tuples = rows.map((row) => {
+          const placeholders = cols.map((col) => { params.push(row[col]); return '\$' + params.length; });
+          return '(' + placeholders.join(', ') + ')';
+        });
+        const conflictCols = String(options?.onConflict || '').split(',').map((s) => s.trim()).filter(Boolean);
+        const updateCols = cols.filter((c) => !conflictCols.includes(c));
+        const onConflict = options?.onConflict
+          ? (updateCols.length > 0
+              ? ' ON CONFLICT (' + conflictCols.join(', ') + ') DO UPDATE SET ' + updateCols.map((c) => c + ' = excluded.' + c).join(', ')
+              : ' ON CONFLICT (' + conflictCols.join(', ') + ') DO NOTHING')
+          : '';
+        result = client.query(
+          'INSERT INTO ' + table + ' (' + cols.join(', ') + ') VALUES ' + tuples.join(', ') + (action === 'upsert' ? onConflict : '') + ' RETURNING *',
+          params
+        );
+      } else if (action === 'update') {
+        const allowed = getTableCols(table);
+        const entries = Object.entries(serializeForDb(table, values) || {})
+          .filter(([key]) => !allowed.size || allowed.has(key));
+        const params = [];
+        const setSql = entries.map(([key, val]) => { params.push(val); return key + ' = \$' + params.length; }).join(', ');
+        const whereSql = buildWhere(filters, params);
+        result = client.query('UPDATE ' + table + ' SET ' + setSql + whereSql + ' RETURNING *', params);
+      } else if (action === 'delete') {
+        const params = [];
+        const whereSql = buildWhere(filters, params);
+        result = client.query('DELETE FROM ' + table + whereSql + ' RETURNING *', params);
+      } else {
+        return res.status(400).json({ error: { message: 'Acao invalida.' } });
+      }
+      res.json({ data: normalizeRows(table, result.rows), error: null });
+    } finally {
+      client.release();
+    }
+  } catch (error) { next(error); }
+});
+
+app.post('/api/rpc/:name', requireUser, async (req, res, next) => {
+  try {
+    const { name } = req.params;
+    if (name === 'list_all_users') {
+      const { rows } = query('SELECT id, email, display_name, role, created_at FROM profiles ORDER BY display_name, email');
+      return res.json({ data: rows, error: null });
+    }
+    if (name === 'sync_profiles_from_auth') {
+      return res.json({ data: { synced: true }, error: null });
+    }
+    return res.status(404).json({ error: { message: 'RPC nao implementado.' } });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/reports/aggregate', requireUser, async (req, res, next) => {
+  try {
+    const { type, filters = {} } = req.body || {};
+    const { dateFrom, dateTo } = filters;
+    const dateClauses = [];
+    const dateParams = [];
+    if (dateFrom) { dateParams.push(dateFrom); dateClauses.push('executed_at >= \$' + dateParams.length); }
+    if (dateTo) { dateParams.push(dateTo); dateClauses.push('executed_at <= \$' + dateParams.length); }
+    const baseWhere = dateClauses.length ? ' WHERE ' + dateClauses.join(' AND ') : '';
+
+    if (type === 'trend-analysis') {
+      const granularity = String(filters.granularity || 'day');
+      const dateFmt = granularity === 'month' ? '%Y-%m' : granularity === 'week' ? '%Y-W%W' : '%Y-%m-%d';
+      const sql = "SELECT strftime('" + dateFmt + "', executed_at) AS bucket, SUM(CASE WHEN status='passed' THEN 1 ELSE 0 END) AS passed, SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END) AS failed, SUM(CASE WHEN status='blocked' THEN 1 ELSE 0 END) AS blocked, SUM(CASE WHEN status='not_tested' THEN 1 ELSE 0 END) AS not_tested, COUNT(*) AS total FROM test_executions WHERE executed_at IS NOT NULL" + (dateClauses.length ? ' AND ' + dateClauses.join(' AND ') : '') + " GROUP BY 1 ORDER BY 1";
+      const { rows } = query(sql, dateParams);
+      const totals = rows.reduce((a, c) => ({ passed: a.passed + Number(c.passed), failed: a.failed + Number(c.failed), blocked: a.blocked + Number(c.blocked), not_tested: a.not_tested + Number(c.not_tested), total: a.total + Number(c.total) }), { passed: 0, failed: 0, blocked: 0, not_tested: 0, total: 0 });
+      return res.json({ type, generatedAt: new Date().toISOString(), data: { series: rows, totals, granularity } });
+    }
+
+    if (type === 'failure-analysis') {
+      const { rows } = query('SELECT id, case_id, plan_id, status, executed_at FROM test_executions' + baseWhere, dateParams);
+      const failed = rows.filter((r) => r.status === 'failed');
+      const caseCount = new Map();
+      const planCount = new Map();
+      for (const r of failed) {
+        if (r.case_id) caseCount.set(r.case_id, (caseCount.get(r.case_id) || 0) + 1);
+        if (r.plan_id) planCount.set(r.plan_id, (planCount.get(r.plan_id) || 0) + 1);
+      }
+      const caseIds = [...caseCount.keys()];
+      const planIds = [...planCount.keys()];
+      const caseRows = caseIds.length
+        ? query('SELECT id, title FROM test_cases WHERE id IN (' + caseIds.map((_, i) => '\$' + (i + 1)).join(', ') + ')', caseIds).rows
+        : [];
+      const planRows = planIds.length
+        ? query('SELECT id, title FROM test_plans WHERE id IN (' + planIds.map((_, i) => '\$' + (i + 1)).join(', ') + ')', planIds).rows
+        : [];
+      const caseMap = new Map(caseRows.map((r) => [r.id, r.title]));
+      const planMap = new Map(planRows.map((r) => [r.id, r.title]));
+      return res.json({ type, generatedAt: new Date().toISOString(), data: {
+        totals: { totalExecutions: rows.length, failedExecutions: failed.length, failureRate: rows.length ? failed.length / rows.length : 0, lastFailedAt: failed[0]?.executed_at || null },
+        topCases: caseIds.map((id) => ({ id, title: caseMap.get(id) || id, count: caseCount.get(id) })).sort((a, b) => b.count - a.count).slice(0, 20),
+        topPlans: planIds.map((id) => ({ id, title: planMap.get(id) || id, count: planCount.get(id) })).sort((a, b) => b.count - a.count).slice(0, 20),
+      }});
+    }
+
+    if (type === 'requirements-defects') {
+      const { rows: reqs } = query('SELECT status, priority FROM requirements');
+      const { rows: defs } = query('SELECT status, severity FROM defects');
+      const countBy = (rowArr, key) => rowArr.reduce((acc, row) => ({ ...acc, [row[key]]: (acc[row[key]] || 0) + 1 }), {});
+      return res.json({ type, generatedAt: new Date().toISOString(), data: {
+        totals: { requirements: reqs.length, defects: defs.length },
+        requirementsByStatus: countBy(reqs, 'status'),
+        requirementsByPriority: countBy(reqs, 'priority'),
+        defectsBySeverity: countBy(defs, 'severity'),
+        defectsByStatus: countBy(defs, 'status'),
+      }});
+    }
+
+    res.status(400).json({ error: { message: 'Tipo de relatorio nao suportado.' } });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/storage/upload', requireUser, upload.single('file'), async (req, res) => {
+  res.json({ path: req.file.filename, publicUrl: '/uploads/' + req.file.filename });
+});
+
+app.use((error, _req, res, _next) => {
+  console.error(error);
+  res.status(500).json({ error: { message: error?.message || 'Erro interno.' } });
+});
+
+app.listen(PORT, () => {
+  console.log('Nexus Testing API rodando em http://localhost:' + PORT);
+});
+
+process.on('SIGINT', () => {
+  try { db.close(); } catch {}
+  process.exit(0);
+});

@@ -5,7 +5,9 @@ import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, Calendar, Download, PlayCircle, Edit, Trash2, Search, Filter, ArrowUpDown } from 'lucide-react';
+import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, Calendar } from 'lucide-react';
+import { StatusDot } from '@/components/ui/StatusDot';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { getTestExecutions, getTestExecutionsByProject, getTestPlansByIds, getTestCasesByIds, deleteTestExecution } from '@/services/supabaseService';
 import { TestExecution } from '@/types';
@@ -13,6 +15,7 @@ import { TestExecutionForm } from '@/components/forms/TestExecutionForm';
 import { DetailModal } from '@/components/DetailModal';
 import { StandardButton } from '@/components/StandardButton';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
+import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -442,7 +445,7 @@ export const TestExecutions = () => {
     <div className="flex-1 space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="pl-24">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">Execuções</h1>
           <p className="text-sm text-muted-foreground">Acompanhe e gerencie as execuções de teste</p>
         </div>
@@ -482,30 +485,24 @@ export const TestExecutions = () => {
         </Dialog>
       </div>
 
-      {/* Search and Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      {/* Toolbar */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             value={searchTerm}
             onChange={(e) => handleSearchTermChange(e.target.value)}
             placeholder="Buscar por número (#12), executor ou notas"
-            className="pl-10 h-10"
+            className="pl-9 h-9 bg-muted/20 border-border/60"
           />
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* Seletor de projeto removido — seleção global pelo Dashboard */}
-
-          {/* View Mode Toggle */}
+        <div className="flex items-center gap-1 shrink-0">
           <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
-
-          {/* Sort Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Ordenar
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">Ordenar</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -517,13 +514,18 @@ export const TestExecutions = () => {
               <DropdownMenuItem onClick={() => handleSortChange('status:desc')}>Status (Z→A)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          {/* Filter Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Filter className="h-4 w-4 mr-2" />
-                {filterStatus === 'all' ? 'Todos' : `Status: ${executionStatusLabel(filterStatus as any)}`}
+              <Button variant="ghost" size="sm" className={cn(
+                'h-9 gap-1.5 px-3 border font-normal',
+                filterStatus !== 'all'
+                  ? 'border-brand/50 text-brand bg-brand/5 hover:bg-brand/10'
+                  : 'border-border/60 hover:border-border'
+              )}>
+                <ListFilter className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">
+                  {filterStatus === 'all' ? 'Todos' : executionStatusLabel(filterStatus as any)}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -536,13 +538,12 @@ export const TestExecutions = () => {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Export Dropdown */}
           {executions.length > 0 && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Download className="h-4 w-4 mr-2" />
-                  Exportar
+                <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                  <Download className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline text-sm">Exportar</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -619,40 +620,36 @@ export const TestExecutions = () => {
               paginatedExecutions.map((execution) => (
                 <Card
                   key={execution.id}
-                  className="border border-border/50 h-full flex flex-col cursor-pointer card-hover"
+                  className="border border-border/50 flex flex-col cursor-pointer card-hover"
                   onClick={() => handleViewDetails(execution)}
                 >
-                  <CardHeader className="p-4 pb-3 flex-shrink-0">
-                    <div className="flex items-start justify-between">
-                      <CardTitle className="text-base line-clamp-2 leading-tight flex items-center gap-2 overflow-hidden min-w-0">
-                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">
+                  <CardHeader className="p-4 pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 min-w-0">
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded flex-shrink-0 mt-0.5">
                           {exeLabel(execution)}
                         </span>
-                        <span className="truncate">Execução</span>
-                        <Badge className={`${executionStatusBadgeClass(execution.status as any)} flex-shrink-0`}>
-                          {executionStatusLabel(execution.status as any)}
-                        </Badge>
-                      </CardTitle>
+                        <span className="text-sm font-semibold truncate">
+                          {caseLabel(execution.case_id)} • {planLabel(execution.plan_id)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-1.5">
+                      <StatusDot status={execution.status} label={executionStatusLabel(execution.status as any)} />
                     </div>
                   </CardHeader>
-                  <CardContent className="p-4 pt-0 flex-1 flex flex-col overflow-hidden">
-                    <div className="flex-1 overflow-hidden">
-                      <p className="text-sm">
-                        <span className="font-medium">Executado por:</span> {execution.executed_by}
+                  <CardContent className="p-4 pt-0 flex flex-col flex-1">
+                    {execution.notes && (
+                      <p className="text-xs text-muted-foreground line-clamp-2 mb-3">
+                        {execution.notes}
                       </p>
-                      {execution.notes && (
-                        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-4 mb-2">
-                          {execution.notes}
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2 flex-shrink-0 mt-auto">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(execution.executed_at).toLocaleDateString('pt-BR')}
-                        </div>
+                    )}
+                    <div className="mt-auto flex items-center justify-between">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {new Date(execution.executed_at).toLocaleDateString('pt-BR')}
                       </div>
+                      <UserAvatar userId={execution.user_id} name={execution.executed_by} />
                     </div>
                   </CardContent>
                 </Card>
@@ -667,13 +664,13 @@ export const TestExecutions = () => {
             {sortedExecutions.length > 0 ? (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Header da tabela */}
-                <div className="grid grid-cols-[80px_80px_1fr_120px_160px_140px_100px] items-start gap-4 px-4 py-3 bg-muted/50 border-b border-border text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  <div className="pt-px">ID da Execução</div>
-                  <div className="text-center pt-px">ID do Caso</div>
-                  <div className="text-center pt-px">Plano de Teste</div>
-                  <div className="text-center pt-px">Status</div>
-                  <div className="text-center pt-px">Executado por</div>
-                  <div className="text-center pt-px">Data da Execução</div>
+                <div className="grid grid-cols-[80px_80px_4fr_2fr_80px_110px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div>ID</div>
+                  <div>Caso</div>
+                  <div>Plano de Teste</div>
+                  <div>Status</div>
+                  <div className="text-center">Executor</div>
+                  <div>Data</div>
                   <div className="flex justify-end">Ações</div>
                 </div>
                 {/* Linhas */}
@@ -681,62 +678,61 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[80px_80px_1fr_120px_160px_140px_100px] items-start gap-4 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[80px_80px_4fr_2fr_80px_110px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
-                      <div className="flex items-center">
-                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">
+                      <div>
+                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
                           {exeLabel(execution)}
                         </span>
                       </div>
+
                       {/* ID Caso */}
-                      <div className="flex items-center justify-center">
-                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">{caseLabel(execution.case_id)}</span>
+                      <div>
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                          {caseLabel(execution.case_id)}
+                        </span>
                       </div>
-                      {/* Plano de Teste (TAG do plano) */}
-                      <div className="flex items-center justify-center min-w-0">
-                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">
+
+                      {/* Plano */}
+                      <div className="min-w-0">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
                           {planLabel(execution.plan_id)}
                         </span>
                       </div>
+
                       {/* Status */}
-                      <div className="flex items-center justify-center">
-                        <Badge variant="outline" className={executionStatusBadgeClass(execution.status as any)}>
-                          {executionStatusLabel(execution.status as any)}
-                        </Badge>
+                      <div>
+                        <StatusDot status={execution.status} label={executionStatusLabel(execution.status as any)} />
                       </div>
-                      {/* Executado por */}
-                      <div className="flex items-center justify-center text-sm text-muted-foreground truncate">
-                        <span className="truncate max-w-[150px]">{execution.executed_by || '—'}</span>
+
+                      {/* Avatar executor */}
+                      <div className="flex justify-center">
+                        <UserAvatar userId={execution.user_id} name={execution.executed_by} />
                       </div>
+
                       {/* Data */}
-                      <div className="flex items-center justify-center text-sm text-muted-foreground whitespace-nowrap">
+                      <div className="text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(execution.executed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </div>
+
                       {/* Ações */}
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                      <div className="flex items-center gap-0.5 justify-end">
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
                           onClick={(e) => { e.stopPropagation(); setSelectedExecution(execution); setShowEditForm(true); }}
-                          className="h-8 w-8 p-0"
                           disabled={!currentProject || currentProject.status !== 'active'}
                           title={!currentProject ? 'Selecione um projeto ativo para editar execuções' : (currentProject.status !== 'active' ? 'Projeto não ativo — edição desabilitada' : undefined)}
                         >
-                          <Edit className="h-4 w-4" />
+                          <Edit className="h-3.5 w-3.5" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                           onClick={(e) => { e.stopPropagation(); requestDelete(execution.id); }}
-                          className="h-8 w-8 p-0"
                           disabled={!currentProject || isProjectInactive}
                           title={!currentProject ? 'Selecione um projeto ativo para excluir execuções' : (isProjectInactive ? 'Projeto não ativo — exclusão desabilitada' : undefined)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        {/* Removido o botão de visualizar (Eye) para manter padrão: clique na linha abre detalhes */}
                       </div>
                     </div>
                   ))}

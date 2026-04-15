@@ -169,20 +169,24 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
   const [role, setRole] = useState<UserRole>(SINGLE_TENANT ? 'master' : 'viewer');
   const [loading, setLoading] = useState(true);
 
-  const fetchUserRole = async (userId: string) => {
-    if (SINGLE_TENANT) return 'master' as UserRole;
+  const fetchUserRole = async (userId: string): Promise<UserRole> => {
+    if (SINGLE_TENANT) return 'master';
+    // Usar role do objeto user (JWT) como fonte primária - elimina dependência de query extra
+    const tokenRole = (user as any)?.role as UserRole | undefined;
+    if (tokenRole && ['master','admin','manager','tester','viewer'].includes(tokenRole)) {
+      return tokenRole;
+    }
+    // Fallback: consultar banco apenas se o token não tiver o role
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('role')
         .eq('id', userId)
         .single();
-
       if (error) throw error;
       return (data?.role as UserRole) || 'viewer';
-    } catch (error) {
-      console.error('Error fetching user role:', error);
-      return 'viewer' as UserRole;
+    } catch {
+      return 'viewer';
     }
   };
 
@@ -231,7 +235,9 @@ export const PermissionsProvider = ({ children }: PermissionsProviderProps) => {
       ]);
 
       setRole(userRole);
-      setPermissions({ ...userPermissions, role: userRole });
+      // Master sempre recebe permissoes completas, independente do resultado do banco
+      const effectivePerms = userRole === 'master' ? getDefaultPermissions('master') : userPermissions;
+      setPermissions({ ...effectivePerms, role: userRole });
     } catch (error) {
       console.error('Error refreshing permissions:', error);
     } finally {

@@ -69,7 +69,7 @@ export const Layout = ({ children }: LayoutProps) => {
           )}>
             {/* Breadcrumbs */}
             <div className="mb-4 sm:mb-6 text-sm text-muted-foreground flex items-center gap-2">
-              <span className="text-foreground font-medium">TestPilot AI</span>
+              <span className="text-foreground font-medium">Nexus Testing</span>
               <span className="opacity-70">/</span>
               <span className="accent-gradient-text font-semibold">{currentTitle}</span>
             </div>

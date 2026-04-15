@@ -69,7 +69,7 @@ export const Gestao = () => {
     <div className="flex-1 space-y-6 p-6">
       {/* Header padrão como outras páginas */}
       <div className="flex items-center justify-between">
-        <div className="pl-24">
+        <div>
           <h1 className="text-2xl font-bold text-foreground">Gestão</h1>
           <p className="text-sm text-muted-foreground">Organize requisitos, vínculos e defeitos</p>
         </div>

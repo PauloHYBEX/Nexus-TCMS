@@ -301,7 +301,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
 
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3">
-        <div className="relative w-full max-w-md">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Buscar por ID ou Título"
