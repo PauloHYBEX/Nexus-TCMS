@@ -380,7 +380,12 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               <div>
                 <Label className="block text-sm mb-1">Foto</Label>
                 <div className="flex items-center gap-2">
-                  <Input type="file" accept="image/*" onChange={handleAvatarChange} />
+                  <label className="flex items-center gap-2 cursor-pointer text-sm border border-border/70 rounded-md px-3 py-1.5 bg-background hover:bg-accent hover:text-accent-foreground transition-colors select-none">
+                    <Camera className="h-4 w-4" />
+                    Escolher arquivo
+                    <input type="file" className="sr-only" accept="image/*" onChange={handleAvatarChange} />
+                  </label>
+                  {avatarUrl && <span className="text-xs text-muted-foreground truncate max-w-[120px]">foto salva</span>}
                 </div>
               </div>
             </div>

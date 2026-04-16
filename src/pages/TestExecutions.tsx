@@ -452,15 +452,16 @@ export const TestExecutions = () => {
           <p className="text-sm text-muted-foreground">Acompanhe e gerencie as execuções de teste</p>
         </div>
         {/* Nova Execução */}
-        <Button
-            variant="outline"
-            size="icon"
-            title="Gerar Execução com IA"
-            disabled={!currentProject || currentProject.status !== 'active'}
-            onClick={() => setShowAIModal(true)}
-          >
-            <Sparkles className="h-4 w-4 text-amber-400" />
-          </Button>
+        <div className="flex items-center gap-2">
+          <Button
+              variant="outline"
+              size="icon"
+              title="Gerar Execução com IA"
+              disabled={!currentProject || currentProject.status !== 'active'}
+              onClick={() => setShowAIModal(true)}
+            >
+              <Sparkles className="h-4 w-4 text-amber-400" />
+            </Button>
         <Dialog open={showForm} onOpenChange={(open) => {
           setShowForm(open);
           const params = new URLSearchParams(searchParams);
@@ -494,6 +495,7 @@ export const TestExecutions = () => {
             />
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Toolbar */}

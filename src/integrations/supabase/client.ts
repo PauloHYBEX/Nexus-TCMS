@@ -197,7 +197,7 @@ const functions = {
 const storage = {
   from(_bucket: string) {
     return {
-      async upload(_path: string, file: File) {
+      async upload(_path: string, file: File, _options?: any) {
         const token = readToken();
         const formData = new FormData();
         formData.append('file', file);

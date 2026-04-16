@@ -24,6 +24,7 @@ import { ollamaGenerateText } from '@/integrations/ollama/client';
 import { openRouterGenerateText } from '@/integrations/openrouter/client';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useAISettings } from '@/hooks/useAISettings';
 
 // ─── Constantes de capacidades ───────────────────────────────────────────────
 const ALL_CAPABILITIES: { id: string; label: string }[] = [
@@ -68,7 +69,8 @@ export const ModelControlPanel = () => {
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<AIModelConfig | null>(null);
   const [openSections, setOpenSections] = useState({ models: true, templates: false, tests: false });
-  const [activeTab, setActiveTab] = useState<'models' | 'templates' | 'tests'>('models');
+  const [activeTab, setActiveTab] = useState<'models' | 'templates' | 'tests' | 'settings'>('models');
+  const { settings: aiSettings, updateSettings: updateAISettings } = useAISettings();
 
   // Models list state
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
@@ -599,6 +601,7 @@ export const ModelControlPanel = () => {
             <TabsTrigger value="models">Modelos</TabsTrigger>
             <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="tests">Testes</TabsTrigger>
+            <TabsTrigger value="settings">Configurações</TabsTrigger>
           </TabsList>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
@@ -907,6 +910,59 @@ export const ModelControlPanel = () => {
                 )}
               </CollapsibleContent>
             </Collapsible>
+          </TabsContent>
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* TAB: CONFIGURAÇÕES                                                   */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <TabsContent value="settings">
+            <div className="border rounded-lg p-5 space-y-6">
+              <div>
+                <h3 className="text-sm font-semibold mb-1">Geração em Lote</h3>
+                <p className="text-xs text-muted-foreground mb-4">Controla o modo padrão ao abrir o gerador de IA nas páginas.</p>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm">Gerar planos em lote</Label>
+                      <p className="text-xs text-muted-foreground">Habilita o modo lote para Planos de Teste no gerador IA</p>
+                    </div>
+                    <Switch
+                      checked={aiSettings.batchGenerationEnabled}
+                      onCheckedChange={v => updateAISettings({ batchGenerationEnabled: v })}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label className="text-sm">Gerar casos em lote</Label>
+                      <p className="text-xs text-muted-foreground">Habilita o modo lote para Casos de Teste no gerador IA</p>
+                    </div>
+                    <Switch
+                      checked={aiSettings.batchCaseGenerationEnabled}
+                      onCheckedChange={v => updateAISettings({ batchCaseGenerationEnabled: v })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold mb-1">Modelo Preferido</h3>
+                <p className="text-xs text-muted-foreground mb-3">Modelo padrão selecionado automaticamente ao abrir o gerador.</p>
+                <Select
+                  value={aiSettings.preferredModel || 'default'}
+                  onValueChange={v => updateAISettings({ preferredModel: v })}
+                >
+                  <SelectTrigger className="h-8 text-sm w-64">
+                    <SelectValue placeholder="Automático" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Automático (seleção inteligente)</SelectItem>
+                    {(config?.models || []).filter(m => m.active).map(m => (
+                      <SelectItem key={m.id} value={m.id}>{m.name} <span className="text-muted-foreground ml-1">({providerLabel(m.provider)})</span></SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
           </TabsContent>
         </Tabs>
       </div>
