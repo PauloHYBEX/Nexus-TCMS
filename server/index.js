@@ -286,13 +286,17 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
       if (action === 'insert' || action === 'upsert') {
         const rawRows = Array.isArray(values) ? values : [values];
         if (!rawRows.length) return res.json({ data: [], error: null });
+        let nextSeq = null; // inicializado na 1ª linha sem sequence para evitar duplicatas em lote
         const rows = rawRows.map((row) => {
           const r = serializeForDb(table, row);
           const base = r.id ? r : { id: randomUUID(), ...r };
           const filtered = filterToTableCols(table, base);
           if (SEQ_TABLES.has(table) && filtered.sequence == null) {
-            const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) + 1 AS next FROM ' + table, []);
-            filtered.sequence = mx[0]?.next || 1;
+            if (nextSeq === null) {
+              const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) AS current FROM ' + table, []);
+              nextSeq = (mx[0]?.current || 0) + 1;
+            }
+            filtered.sequence = nextSeq++;
           }
           return filtered;
         });

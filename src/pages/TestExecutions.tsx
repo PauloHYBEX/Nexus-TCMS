@@ -5,7 +5,7 @@ import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, Calendar } from 'lucide-react';
+import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, Calendar, Sparkles } from 'lucide-react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +14,7 @@ import { TestExecution } from '@/types';
 import { TestExecutionForm } from '@/components/forms/TestExecutionForm';
 import { DetailModal } from '@/components/DetailModal';
 import { StandardButton } from '@/components/StandardButton';
+import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
@@ -47,6 +48,7 @@ export const TestExecutions = () => {
   const [executions, setExecutions] = useState<TestExecution[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [selectedExecution, setSelectedExecution] = useState<TestExecution | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
@@ -450,6 +452,15 @@ export const TestExecutions = () => {
           <p className="text-sm text-muted-foreground">Acompanhe e gerencie as execuções de teste</p>
         </div>
         {/* Nova Execução */}
+        <Button
+            variant="outline"
+            size="icon"
+            title="Gerar Execução com IA"
+            disabled={!currentProject || currentProject.status !== 'active'}
+            onClick={() => setShowAIModal(true)}
+          >
+            <Sparkles className="h-4 w-4 text-amber-400" />
+          </Button>
         <Dialog open={showForm} onOpenChange={(open) => {
           setShowForm(open);
           const params = new URLSearchParams(searchParams);
@@ -853,6 +864,20 @@ export const TestExecutions = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal IA para gerar execução */}
+      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
+        <DialogContent className="max-w-3xl overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-400" />
+              Gerar Execução com IA
+            </DialogTitle>
+            <DialogDescription className="sr-only">Gerar execução de teste com inteligência artificial</DialogDescription>
+          </DialogHeader>
+          <AIGeneratorForm initialType="execution" onSuccess={() => { setShowAIModal(false); loadExecutions(); }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

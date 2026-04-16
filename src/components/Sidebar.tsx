@@ -28,7 +28,6 @@ const navigation = [
   { name: 'Casos de Teste',  href: '/cases',        icon: FlaskConical,    color: 'text-teal-400',   requiredPermission: 'can_manage_cases' },
   { name: 'Execuções',       href: '/executions',   icon: Play,            color: 'text-green-400',  requiredPermission: 'can_manage_executions' },
   { name: 'Gestão',          href: '/management',   icon: Kanban,          color: 'text-orange-400', requiredPermission: null },
-  { name: 'Gerador IA',      href: '/ai-generator', icon: Bot,             color: 'text-amber-400',  requiredPermission: 'can_use_ai' },
   { name: 'Relatórios',      href: '/reports',      icon: TrendingUp,      color: 'text-pink-400',   requiredPermission: 'can_view_reports' },
   { name: 'Histórico',       href: '/history',      icon: Clock,           color: 'text-sky-400',    requiredPermission: null },
 ];

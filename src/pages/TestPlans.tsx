@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getTestPlans, deleteTestPlan, getPlanLinkedCounts } from '@/services/supabaseService';
 import { TestPlan } from '@/types';
 import { TestPlanForm } from '@/components/forms/TestPlanForm';
+import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 // Removido seletor de projeto local: o controle é feito globalmente no Dashboard
 import { ProjectDisplayField } from '@/components/ProjectDisplayField';
 import { StandardButton } from '@/components/StandardButton';
@@ -52,8 +53,10 @@ export const TestPlans = () => {
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<TestPlan | null>(null);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<TestPlan | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<TestPlan | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>(() => {
     const savedMode = localStorage.getItem('testPlans_viewMode');
     return (savedMode as 'cards' | 'list') || 'list';
@@ -62,7 +65,6 @@ export const TestPlans = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
-  const [editingPlan, setEditingPlan] = useState<TestPlan | null>(null);
   // Paginação via hook
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(9);
@@ -506,7 +508,17 @@ export const TestPlans = () => {
           <h1 className="text-2xl font-bold text-foreground">Planos de Teste</h1>
           <p className="text-sm text-muted-foreground">Gerencie seus planos de teste</p>
         </div>
-        <StandardButton 
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            title="Gerar Plano com IA"
+            disabled={!currentProject || currentProject.status !== 'active'}
+            onClick={() => setShowAIModal(true)}
+          >
+            <Sparkles className="h-4 w-4 text-amber-400" />
+          </Button>
+          <StandardButton 
           variant="brand"
           onClick={() => {
             setShowForm(true);
@@ -522,6 +534,7 @@ export const TestPlans = () => {
           <Plus className="h-4 w-4 mr-2" />
           Novo Plano de Teste
         </StandardButton>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -922,6 +935,20 @@ export const TestPlans = () => {
           if (plan) handleRequestDelete(plan);
         }}
       />
+
+      {/* Modal IA para gerar plano */}
+      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
+        <DialogContent className="max-w-3xl overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-400" />
+              Gerar Plano de Teste com IA
+            </DialogTitle>
+            <DialogDescription className="sr-only">Gerar plano de teste com inteligência artificial</DialogDescription>
+          </DialogHeader>
+          <AIGeneratorForm initialType="plan" onSuccess={() => { setShowAIModal(false); loadPlans(); }} />
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm Delete Modal */}
       <AlertDialog open={confirmDeleteOpen} onOpenChange={(open) => {

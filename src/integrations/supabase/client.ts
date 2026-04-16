@@ -171,9 +171,12 @@ const auth = {
     const result = await apiFetch('/auth/reset-password', { method: 'POST', body: JSON.stringify({ email }) });
     return { data: result.data || null, error: result.error || null };
   },
-  async updateUser({ password }: { password: string }) {
-    const result = await apiFetch('/auth/update-password', { method: 'POST', body: JSON.stringify({ password }) });
-    return { data: result.data || null, error: result.error || null };
+  async updateUser(update: { password?: string; data?: Record<string, any> }) {
+    if ((update as any).password) {
+      const result = await apiFetch('/auth/update-password', { method: 'POST', body: JSON.stringify({ password: (update as any).password }) });
+      return { data: result.data || null, error: result.error || null };
+    }
+    return { data: { user: null }, error: null };
   },
   onAuthStateChange(callback: (event: string, session: any) => void) {
     listeners.add(callback);

@@ -15,6 +15,7 @@ import { TestCase } from '@/types';
 import { TestCaseForm } from '@/components/forms/TestCaseForm';
 import { DetailModal } from '@/components/DetailModal';
 import { StandardButton } from '@/components/StandardButton';
+import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -54,6 +55,7 @@ export const TestCases = () => {
   const [cases, setCases] = useState<TestCase[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showAIModal, setShowAIModal] = useState(false);
   const [editingCase, setEditingCase] = useState<TestCase | null>(null);
   const [selectedCase, setSelectedCase] = useState<TestCase | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -335,7 +337,17 @@ export const TestCases = () => {
           <h1 className="text-2xl font-bold text-foreground">Casos de Teste</h1>
           <p className="text-sm text-muted-foreground">Gerencie seus casos de teste</p>
         </div>
-        <StandardButton 
+<div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            title="Gerar Caso com IA"
+            disabled={!currentProject || currentProject.status !== 'active'}
+            onClick={() => setShowAIModal(true)}
+          >
+            <Sparkles className="h-4 w-4 text-amber-400" />
+          </Button>
+          <StandardButton 
           variant="brand"
           onClick={() => setShowForm(true)}
           disabled={!currentProject || currentProject.status !== 'active'}
@@ -344,6 +356,7 @@ export const TestCases = () => {
           <Plus className="h-4 w-4 mr-2" />
           Novo Caso de Teste
         </StandardButton>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -691,6 +704,20 @@ export const TestCases = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal IA para gerar caso */}
+      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
+        <DialogContent className="max-w-3xl overflow-x-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-amber-400" />
+              Gerar Caso de Teste com IA
+            </DialogTitle>
+            <DialogDescription className="sr-only">Gerar caso de teste com inteligência artificial</DialogDescription>
+          </DialogHeader>
+          <AIGeneratorForm initialType="case" onSuccess={() => { setShowAIModal(false); loadCases(); }} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

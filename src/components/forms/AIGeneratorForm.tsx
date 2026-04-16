@@ -114,9 +114,12 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
         };
         reader.readAsText(selectedFile);
       } else {
+        const isPptx = selectedFile.name.toLowerCase().endsWith('.pptx');
         toast({
           title: 'Aviso',
-          description: 'Para arquivos que não são texto puro, cole o conteúdo manualmente nos campos abaixo (ex.: Requisitos Específicos).',
+          description: isPptx
+            ? 'Arquivo PowerPoint detectado. Copie o conteúdo relevante dos slides e cole nos campos abaixo.'
+            : 'Para arquivos que não são texto puro, cole o conteúdo relevante nos campos abaixo (ex.: Requisitos Específicos).',
           variant: 'default'
         });
       }
@@ -286,7 +289,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
   ];
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4" aria-busy={loading}>
+    <form onSubmit={handleSubmit} className="space-y-4 overflow-x-hidden" aria-busy={loading}>
       {/* Top bar: project + file upload */}
       <div className="flex items-center justify-between pb-3 border-b border-border/50">
         <div>
@@ -302,10 +305,10 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
             </span>
           )}
         </div>
-        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors" title="Aceita .txt, .md, .doc, .docx, .pdf, .xlsx, .xls">
+      <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors" title="Aceita .txt, .md, .doc, .docx, .pdf, .xlsx, .xls, .pptx">
           <Upload className="h-3.5 w-3.5" />
           {file ? <span className="max-w-[140px] truncate">{file.name}</span> : 'Importar documento'}
-          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls" onChange={handleFileChange} />
+          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls,.pptx" onChange={handleFileChange} />
         </label>
       </div>
 

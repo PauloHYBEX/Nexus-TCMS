@@ -273,20 +273,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     try {
       setSaving(true);
       // Salvar nome
-      if (SINGLE_TENANT) {
-        const { error: upErr } = await supabase.auth.updateUser({ data: { full_name: displayName, avatar_url: avatarUrl, github_url: githubUrl, google_url: googleUrl, website_url: websiteUrl, tags } as any });
-        if (upErr) throw upErr;
-        toast({ title: 'Perfil atualizado', description: 'Dados atualizados.' });
-        invalidateUserAvatarCache(user.id);
-        try { logActivity('profile_saved', 'single_tenant'); } catch {}
-        return;
-      }
-
+      // Sempre atualiza a tabela profiles (funciona em ambos os modos)
       const { error: profErr } = await supabase
         .from('profiles' as any)
         .update({ display_name: displayName, avatar_url: avatarUrl, github_url: githubUrl, google_url: googleUrl, website_url: websiteUrl, tags })
         .eq('id', user.id);
       if (profErr) throw profErr;
+      if (SINGLE_TENANT) {
+        try { await supabase.auth.updateUser({ data: { full_name: displayName, avatar_url: avatarUrl } } as any); } catch {}
+        toast({ title: 'Perfil atualizado', description: 'Dados atualizados.' });
+        invalidateUserAvatarCache(user.id);
+        try { logActivity('profile_saved', 'single_tenant'); } catch {}
+        return;
+      }
 
       // Salvar preferências (se existir prefs state)
       if (prefs) {
@@ -322,22 +321,19 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
       setLoading(true);
       const ext = file.name.split('.').pop();
       const path = `avatars/${user.id}_${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage.from('public-assets').upload(path, file, { upsert: true });
+      const { data: uploadData, error: upErr } = await supabase.storage.from('public-assets').upload(path, file, { upsert: true });
       if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('public-assets').getPublicUrl(path);
+      // Usar a URL retornada pelo servidor (não o path original do cliente)
+      const serverPath = (uploadData as any)?.publicUrl || path;
+      const { data: pub } = supabase.storage.from('public-assets').getPublicUrl(serverPath);
       const url = pub?.publicUrl || '';
       setAvatarUrl(url);
-      // Persistir imediatamente (evitar perda ao fechar modal)
-      if (SINGLE_TENANT) {
-        const { error: metaErr } = await supabase.auth.updateUser({ data: { avatar_url: url } as any });
-        if (metaErr) throw metaErr;
-      } else {
-        const { error: profErr } = await supabase
-          .from('profiles' as any)
-          .update({ avatar_url: url })
-          .eq('id', user.id);
-        if (profErr) throw profErr;
-      }
+      // Persistir imediatamente em profiles (funciona em ambos os modos)
+      const { error: profErr } = await supabase
+        .from('profiles' as any)
+        .update({ avatar_url: url })
+        .eq('id', user.id);
+      if (profErr) throw profErr;
       toast({ title: 'Avatar atualizado', description: 'Sua foto foi enviada e salva.' });
       invalidateUserAvatarCache(user.id);
       try { logActivity('avatar_updated'); } catch {}
