@@ -978,102 +978,104 @@ export const TestPlans = () => {
         <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir plano de teste?</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              {linkedCounts == null && <span>Verificando dependências...</span>}
-
-              {linkedCounts && (linkedCounts.testCaseCount > 0 || linkedCounts.executionCount > 0 || (linkedCounts.defectCount || 0) > 0) && (
-                <div className="space-y-3">
-                  <div className="text-sm font-medium text-amber-600">
-                    ⚠️ Este plano possui vínculos que impedem a exclusão:
-                  </div>
-
-                  {/* Resumo das contagens */}
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    {linkedCounts.testCaseCount > 0 && (
-                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
-                        {linkedCounts.testCaseCount} caso(s)
-                      </Badge>
-                    )}
-                    {linkedCounts.executionCount > 0 && (
-                      <Badge variant="secondary" className="bg-green-50 text-green-700">
-                        {linkedCounts.executionCount} execução(ões)
-                      </Badge>
-                    )}
-                    {(linkedCounts.defectCount || 0) > 0 && (
-                      <Badge variant="secondary" className="bg-red-50 text-red-700">
-                        {linkedCounts.defectCount} defeito(s)
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Lista de Casos de Teste */}
-                  {linkedDetails && linkedDetails.testCases.length > 0 && (
-                    <div className="border rounded p-2 bg-muted/30">
-                      <div className="text-xs font-medium mb-1 text-blue-700">Casos de Teste:</div>
-                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
-                        {linkedDetails.testCases.map(tc => (
-                          <li key={tc.id} className="truncate">
-                            • CT-{String(tc.sequence || 0).padStart(3, '0')}: {tc.title}
-                          </li>
-                        ))}
-                        {linkedCounts.testCaseCount > linkedDetails.testCases.length && (
-                          <li className="text-muted-foreground italic">
-                            ... e mais {linkedCounts.testCaseCount - linkedDetails.testCases.length} caso(s)
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Lista de Execuções */}
-                  {linkedDetails && linkedDetails.executions.length > 0 && (
-                    <div className="border rounded p-2 bg-muted/30">
-                      <div className="text-xs font-medium mb-1 text-green-700">Execuções:</div>
-                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
-                        {linkedDetails.executions.map(ex => (
-                          <li key={ex.id} className="truncate">
-                            • EXE-{String(ex.sequence || 0).padStart(3, '0')}: {ex.status}
-                          </li>
-                        ))}
-                        {linkedCounts.executionCount > linkedDetails.executions.length && (
-                          <li className="text-muted-foreground italic">
-                            ... e mais {linkedCounts.executionCount - linkedDetails.executions.length} execução(ões)
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  {/* Lista de Defeitos */}
-                  {linkedDetails && linkedDetails.defects.length > 0 && (
-                    <div className="border rounded p-2 bg-muted/30">
-                      <div className="text-xs font-medium mb-1 text-red-700">Defeitos:</div>
-                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
-                        {linkedDetails.defects.map(d => (
-                          <li key={d.id} className="truncate">
-                            • {d.title} ({d.status}{d.severity ? `, ${d.severity}` : ''})
-                          </li>
-                        ))}
-                        {(linkedCounts.defectCount || 0) > linkedDetails.defects.length && (
-                          <li className="text-muted-foreground italic">
-                            ... e mais {(linkedCounts.defectCount || 0) - linkedDetails.defects.length} defeito(s)
-                          </li>
-                        )}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-muted-foreground border-t pt-2">
-                    Remova todos os vínculos acima antes de excluir o plano para manter a integridade dos dados.
-                  </div>
-                </div>
-              )}
-
-              {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && (linkedCounts.defectCount || 0) === 0 && (
-                <span>Esta ação não pode ser desfeita. O plano será removido permanentemente. O código {planToDelete?.sequence ? `PT-${String(planToDelete.sequence).padStart(3, '0')}` : 'deste plano'} poderá ser reutilizado.</span>
-              )}
-            </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* Conteúdo em div ao invés de AlertDialogDescription para evitar nesting inválido */}
+          <div className="text-sm text-muted-foreground space-y-3">
+            {linkedCounts == null && <span>Verificando dependências...</span>}
+
+            {linkedCounts && (linkedCounts.testCaseCount > 0 || linkedCounts.executionCount > 0 || (linkedCounts.defectCount || 0) > 0) && (
+              <div className="space-y-3">
+                <div className="text-sm font-medium text-amber-600">
+                  ⚠️ Este plano possui vínculos que impedem a exclusão:
+                </div>
+
+                {/* Resumo das contagens */}
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {linkedCounts.testCaseCount > 0 && (
+                    <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                      {linkedCounts.testCaseCount} caso(s)
+                    </Badge>
+                  )}
+                  {linkedCounts.executionCount > 0 && (
+                    <Badge variant="secondary" className="bg-green-50 text-green-700">
+                      {linkedCounts.executionCount} execução(ões)
+                    </Badge>
+                  )}
+                  {(linkedCounts.defectCount || 0) > 0 && (
+                    <Badge variant="secondary" className="bg-red-50 text-red-700">
+                      {linkedCounts.defectCount} defeito(s)
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Lista de Casos de Teste */}
+                {linkedDetails && linkedDetails.testCases.length > 0 && (
+                  <div className="border rounded p-2 bg-muted/30">
+                    <div className="text-xs font-medium mb-1 text-blue-700">Casos de Teste:</div>
+                    <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                      {linkedDetails.testCases.map(tc => (
+                        <div key={tc.id} className="truncate">
+                          • CT-{String(tc.sequence || 0).padStart(3, '0')}: {tc.title}
+                        </div>
+                      ))}
+                      {linkedCounts.testCaseCount > linkedDetails.testCases.length && (
+                        <div className="text-muted-foreground italic">
+                          ... e mais {linkedCounts.testCaseCount - linkedDetails.testCases.length} caso(s)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de Execuções */}
+                {linkedDetails && linkedDetails.executions.length > 0 && (
+                  <div className="border rounded p-2 bg-muted/30">
+                    <div className="text-xs font-medium mb-1 text-green-700">Execuções:</div>
+                    <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                      {linkedDetails.executions.map(ex => (
+                        <div key={ex.id} className="truncate">
+                          • EXE-{String(ex.sequence || 0).padStart(3, '0')}: {ex.status}
+                        </div>
+                      ))}
+                      {linkedCounts.executionCount > linkedDetails.executions.length && (
+                        <div className="text-muted-foreground italic">
+                          ... e mais {linkedCounts.executionCount - linkedDetails.executions.length} execução(ões)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lista de Defeitos */}
+                {linkedDetails && linkedDetails.defects.length > 0 && (
+                  <div className="border rounded p-2 bg-muted/30">
+                    <div className="text-xs font-medium mb-1 text-red-700">Defeitos:</div>
+                    <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                      {linkedDetails.defects.map(d => (
+                        <div key={d.id} className="truncate">
+                          • {d.title} ({d.status}{d.severity ? `, ${d.severity}` : ''})
+                        </div>
+                      ))}
+                      {(linkedCounts.defectCount || 0) > linkedDetails.defects.length && (
+                        <div className="text-muted-foreground italic">
+                          ... e mais {(linkedCounts.defectCount || 0) - linkedDetails.defects.length} defeito(s)
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-xs text-muted-foreground border-t pt-2">
+                  Remova todos os vínculos acima antes de excluir o plano para manter a integridade dos dados.
+                </div>
+              </div>
+            )}
+
+            {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && (linkedCounts.defectCount || 0) === 0 && (
+              <div>Esta ação não pode ser desfeita. O plano será removido permanentemente. O código {planToDelete?.sequence ? `PT-${String(planToDelete.sequence).padStart(3, '0')}` : 'deste plano'} poderá ser reutilizado.</div>
+            )}
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && (linkedCounts.defectCount || 0) === 0 && planToDelete && (
