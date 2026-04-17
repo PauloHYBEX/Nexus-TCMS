@@ -49,6 +49,7 @@ const truncate = (t?: string, n = 120) => (t ? (t.length > n ? t.slice(0, n - 1)
 const labelPT = (row?: any) => row && row.sequence != null ? `PT-${String(row.sequence).padStart(3, '0')}` : `PT-${String(row?.id || '').slice(0, 4)}`;
 const labelCT = (row?: any) => row && row.sequence != null ? `CT-${String(row.sequence).padStart(3, '0')}` : `CT-${String(row?.id || '').slice(0, 4)}`;
 const labelEXE = (row?: any) => row && row.sequence != null ? `EXE-${String(row.sequence).padStart(3, '0')}` : `EXE-${String(row?.id || '').slice(0, 4)}`;
+const labelDF = (row?: any) => row && row.sequence != null ? `DF-${String(row.sequence).padStart(3, '0')}` : `DF-${String(row?.id || '').slice(0, 4)}`;
 
 // ===== Regras de negócio: projeto pausado (somente leitura) =====
 async function ensureProjectNotPaused(projectId?: string) {
@@ -1140,7 +1141,7 @@ export const createDefect = async (defect: Omit<Defect, 'id' | 'created_at' | 'u
   try {
     const st = (data.status as string) || '';
     const sv = (data.severity as string) || '';
-    await logActivity(`Defeito criado ${labelDEF(data)}`, `Defeito criado — Status: ${st}; Severidade: ${sv}${data.title ? `; Título: ${data.title}` : ''}`);
+    await logActivity(`Defeito criado ${labelDF(data)}`, `Defeito criado — Status: ${st}; Severidade: ${sv}${data.title ? `; Título: ${data.title}` : ''}`);
   } catch {}
 
   return {
