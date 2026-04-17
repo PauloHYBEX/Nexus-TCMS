@@ -13,7 +13,7 @@ import { StatusDot } from '@/components/ui/StatusDot';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { cn, formatLocalDate } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { getTestPlans, deleteTestPlan, getPlanLinkedCounts } from '@/services/supabaseService';
+import { getTestPlans, deleteTestPlan, getPlanLinkedCounts, getPlanLinkedDetails } from '@/services/supabaseService';
 import { TestPlan } from '@/types';
 import { TestPlanForm } from '@/components/forms/TestPlanForm';
 import { AIGeneratorForm } from '@/components/forms/AIGeneratorForm';
@@ -78,7 +78,12 @@ export const TestPlans = () => {
   // Delete confirmation state
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [planToDelete, setPlanToDelete] = useState<TestPlan | null>(null);
-  const [linkedCounts, setLinkedCounts] = useState<{ testCaseCount: number; executionCount: number } | null>(null);
+  const [linkedCounts, setLinkedCounts] = useState<{ testCaseCount: number; executionCount: number; defectCount?: number } | null>(null);
+  const [linkedDetails, setLinkedDetails] = useState<{
+    testCases: Array<{ id: string; title: string; sequence?: number }>;
+    executions: Array<{ id: string; status: string; sequence?: number }>;
+    defects: Array<{ id: string; title: string; status: string; severity?: string }>;
+  } | null>(null);
   const [planStats, setPlanStats] = useState<Record<string, { cases: number; execs: number }>>({});
 
   // Listener para broadcast de troca de projeto
@@ -352,14 +357,24 @@ export const TestPlans = () => {
     setPlanToDelete(plan);
     setConfirmDeleteOpen(true);
     setLinkedCounts(null);
+    setLinkedDetails(null);
     try {
       if (user) {
-        const counts = await getPlanLinkedCounts(user.id, plan.id);
-        setLinkedCounts(counts);
+        const [counts, details] = await Promise.all([
+          getPlanLinkedCounts(user.id, plan.id),
+          getPlanLinkedDetails(user.id, plan.id)
+        ]);
+        setLinkedCounts({ ...counts, defectCount: details.defectCount });
+        setLinkedDetails({
+          testCases: details.testCases,
+          executions: details.executions,
+          defects: details.defects
+        });
       }
     } catch (err) {
       console.error('Erro ao checar vínculos do plano:', err);
-      setLinkedCounts({ testCaseCount: 0, executionCount: 0 });
+      setLinkedCounts({ testCaseCount: 0, executionCount: 0, defectCount: 0 });
+      setLinkedDetails({ testCases: [], executions: [], defects: [] });
     }
   };
 
@@ -391,6 +406,7 @@ export const TestPlans = () => {
       setConfirmDeleteOpen(false);
       setPlanToDelete(null);
       setLinkedCounts(null);
+      setLinkedDetails(null);
     }
   };
 
@@ -956,25 +972,111 @@ export const TestPlans = () => {
         if (!open) {
           setPlanToDelete(null);
           setLinkedCounts(null);
+          setLinkedDetails(null);
         }
       }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir plano de teste?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {linkedCounts == null && 'Verificando dependências...'}
-              {linkedCounts && (linkedCounts.testCaseCount > 0 || linkedCounts.executionCount > 0)
-                ? (
-                  <span>
-                    Este plano possui {linkedCounts.testCaseCount} caso(s) de teste e {linkedCounts.executionCount} execução(ões) vinculados.
-                    Remova essas dependências antes de excluir o plano para manter a integridade dos dados.
-                  </span>
-                ) : linkedCounts && 'Esta ação não pode ser desfeita. O plano será removido permanentemente.'}
+            <AlertDialogDescription className="space-y-3">
+              {linkedCounts == null && <span>Verificando dependências...</span>}
+
+              {linkedCounts && (linkedCounts.testCaseCount > 0 || linkedCounts.executionCount > 0 || (linkedCounts.defectCount || 0) > 0) && (
+                <div className="space-y-3">
+                  <div className="text-sm font-medium text-amber-600">
+                    ⚠️ Este plano possui vínculos que impedem a exclusão:
+                  </div>
+
+                  {/* Resumo das contagens */}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {linkedCounts.testCaseCount > 0 && (
+                      <Badge variant="secondary" className="bg-blue-50 text-blue-700">
+                        {linkedCounts.testCaseCount} caso(s)
+                      </Badge>
+                    )}
+                    {linkedCounts.executionCount > 0 && (
+                      <Badge variant="secondary" className="bg-green-50 text-green-700">
+                        {linkedCounts.executionCount} execução(ões)
+                      </Badge>
+                    )}
+                    {(linkedCounts.defectCount || 0) > 0 && (
+                      <Badge variant="secondary" className="bg-red-50 text-red-700">
+                        {linkedCounts.defectCount} defeito(s)
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Lista de Casos de Teste */}
+                  {linkedDetails && linkedDetails.testCases.length > 0 && (
+                    <div className="border rounded p-2 bg-muted/30">
+                      <div className="text-xs font-medium mb-1 text-blue-700">Casos de Teste:</div>
+                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                        {linkedDetails.testCases.map(tc => (
+                          <li key={tc.id} className="truncate">
+                            • CT-{String(tc.sequence || 0).padStart(3, '0')}: {tc.title}
+                          </li>
+                        ))}
+                        {linkedCounts.testCaseCount > linkedDetails.testCases.length && (
+                          <li className="text-muted-foreground italic">
+                            ... e mais {linkedCounts.testCaseCount - linkedDetails.testCases.length} caso(s)
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Lista de Execuções */}
+                  {linkedDetails && linkedDetails.executions.length > 0 && (
+                    <div className="border rounded p-2 bg-muted/30">
+                      <div className="text-xs font-medium mb-1 text-green-700">Execuções:</div>
+                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                        {linkedDetails.executions.map(ex => (
+                          <li key={ex.id} className="truncate">
+                            • EXE-{String(ex.sequence || 0).padStart(3, '0')}: {ex.status}
+                          </li>
+                        ))}
+                        {linkedCounts.executionCount > linkedDetails.executions.length && (
+                          <li className="text-muted-foreground italic">
+                            ... e mais {linkedCounts.executionCount - linkedDetails.executions.length} execução(ões)
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* Lista de Defeitos */}
+                  {linkedDetails && linkedDetails.defects.length > 0 && (
+                    <div className="border rounded p-2 bg-muted/30">
+                      <div className="text-xs font-medium mb-1 text-red-700">Defeitos:</div>
+                      <ul className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
+                        {linkedDetails.defects.map(d => (
+                          <li key={d.id} className="truncate">
+                            • {d.title} ({d.status}{d.severity ? `, ${d.severity}` : ''})
+                          </li>
+                        ))}
+                        {(linkedCounts.defectCount || 0) > linkedDetails.defects.length && (
+                          <li className="text-muted-foreground italic">
+                            ... e mais {(linkedCounts.defectCount || 0) - linkedDetails.defects.length} defeito(s)
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  <div className="text-xs text-muted-foreground border-t pt-2">
+                    Remova todos os vínculos acima antes de excluir o plano para manter a integridade dos dados.
+                  </div>
+                </div>
+              )}
+
+              {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && (linkedCounts.defectCount || 0) === 0 && (
+                <span>Esta ação não pode ser desfeita. O plano será removido permanentemente. O código {planToDelete?.sequence ? `PT-${String(planToDelete.sequence).padStart(3, '0')}` : 'deste plano'} poderá ser reutilizado.</span>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && planToDelete && (
+            {linkedCounts && linkedCounts.testCaseCount === 0 && linkedCounts.executionCount === 0 && (linkedCounts.defectCount || 0) === 0 && planToDelete && (
               <AlertDialogAction
                 onClick={() => handleDelete(planToDelete.id)}
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

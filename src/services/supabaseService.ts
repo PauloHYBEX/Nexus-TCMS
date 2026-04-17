@@ -364,6 +364,78 @@ export const getPlanLinkedCounts = async (
   return { testCaseCount, executionCount };
 };
 
+// Detalhes completos dos vínculos de um plano (para modal de exclusão)
+export const getPlanLinkedDetails = async (
+  userId: string,
+  planId: string
+): Promise<{
+  testCaseCount: number;
+  executionCount: number;
+  defectCount: number;
+  testCases: Array<{ id: string; title: string; sequence?: number }>;
+  executions: Array<{ id: string; status: string; sequence?: number }>;
+  defects: Array<{ id: string; title: string; status: string; severity?: string }>;
+}> => {
+  // Buscar casos de teste vinculados
+  const { data: casesData, error: casesError } = await withUserScope(
+    supabase.from('test_cases').select('id, title, sequence'),
+    userId
+  ).eq('plan_id', planId).limit(5);
+
+  // Buscar execuções vinculadas
+  const { data: execsData, error: execsError } = await withUserScope(
+    supabase.from('test_executions').select('id, status, sequence'),
+    userId
+  ).eq('plan_id', planId).limit(5);
+
+  // Buscar defeitos vinculados (via plan_id ou via casos do plano)
+  const { data: defectsData, error: defectsError } = await withUserScope(
+    supabase.from('defects').select('id, title, status, severity, plan_id, case_id'),
+    userId
+  ).eq('plan_id', planId).limit(5);
+
+  const testCases = (casesData || []).map((c: any) => ({
+    id: c.id,
+    title: c.title,
+    sequence: c.sequence
+  }));
+
+  const executions = (execsData || []).map((e: any) => ({
+    id: e.id,
+    status: e.status,
+    sequence: e.sequence
+  }));
+
+  const defects = (defectsData || []).map((d: any) => ({
+    id: d.id,
+    title: d.title,
+    status: d.status,
+    severity: d.severity
+  }));
+
+  // Contagens totais (podem ser mais que o limit)
+  const [testCaseCount, executionCount, defectCount] = await Promise.all([
+    countTestCasesByPlan(userId, planId),
+    countExecutionsByPlan(userId, planId),
+    (async () => {
+      const { count } = await withUserScope(
+        supabase.from('defects').select('*', { count: 'exact', head: true }),
+        userId
+      ).eq('plan_id', planId);
+      return count || 0;
+    })()
+  ]);
+
+  return {
+    testCaseCount,
+    executionCount,
+    defectCount,
+    testCases,
+    executions,
+    defects
+  };
+};
+
 // Funções para Casos de Teste
 export const getTestCases = async (userId: string, planId?: string): Promise<TestCase[]> => {
   let query = withUserScope(

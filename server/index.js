@@ -296,8 +296,21 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
           const filtered = filterToTableCols(table, base);
           if (SEQ_TABLES.has(table) && filtered.sequence == null) {
             if (nextSeq === null) {
-              const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) AS current FROM ' + table, []);
-              nextSeq = (mx[0]?.current || 0) + 1;
+              // Busca o menor sequence disponível (recicla gaps de IDs excluídos)
+              const { rows: gaps } = query(
+                `SELECT MIN(t1.sequence + 1) AS next_avail FROM ${table} t1 ` +
+                `WHERE t1.sequence + 1 NOT IN (SELECT sequence FROM ${table} WHERE sequence IS NOT NULL) ` +
+                `AND t1.sequence IS NOT NULL`,
+                []
+              );
+              const minGap = gaps[0]?.next_avail;
+              if (minGap) {
+                nextSeq = minGap;
+              } else {
+                // Se não há gaps, usa MAX + 1
+                const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) AS current FROM ' + table, []);
+                nextSeq = (mx[0]?.current || 0) + 1;
+              }
             }
             filtered.sequence = nextSeq++;
           }
