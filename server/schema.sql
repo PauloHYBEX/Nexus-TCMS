@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS defects (
   priority TEXT DEFAULT 'medium',
   status TEXT DEFAULT 'open',
   project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+  plan_id TEXT REFERENCES test_plans(id) ON DELETE SET NULL,
   case_id TEXT REFERENCES test_cases(id) ON DELETE SET NULL,
   execution_id TEXT REFERENCES test_executions(id) ON DELETE SET NULL,
   reported_by TEXT REFERENCES profiles(id),

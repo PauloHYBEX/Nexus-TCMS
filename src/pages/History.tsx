@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 
 interface HistoryItem {
   id: string;
-  type: 'plan' | 'case' | 'execution' | 'other';
+  type: 'plan' | 'case' | 'execution' | 'defect' | 'requirement' | 'other';
   action: string;
   description?: string;
   updated_at: Date;
@@ -44,10 +44,9 @@ export const History = () => {
   const [profilesMap, setProfilesMap] = useState<Record<string, { display_name: string | null; avatar_url?: string | null }>>({});
   // Filtros (controlados) e filtros aplicados
   const [q, setQ] = useState('');
-  const [dateStart, setDateStart] = useState<string>('');
-  const [dateEnd, setDateEnd] = useState<string>('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'plan' | 'case' | 'execution'>('all');
-  const [applied, setApplied] = useState<{ q: string; dateStart?: string; dateEnd?: string; type: 'all' | 'plan' | 'case' | 'execution' }>({ q: '', type: 'all' });
+  const [daysFilter, setDaysFilter] = useState<number>(90); // Padrão: últimos 90 dias
+  const [typeFilter, setTypeFilter] = useState<'all' | 'plan' | 'case' | 'execution' | 'defect' | 'requirement'>('all');
+  const [applied, setApplied] = useState<{ q: string; days: number; type: 'all' | 'plan' | 'case' | 'execution' | 'defect' | 'requirement' }>({ q: '', days: 90, type: 'all' });
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<HistoryItem | null>(null);
   // Paginação padrão do sistema
@@ -59,6 +58,8 @@ export const History = () => {
     if (a.includes('execução')) return 'execution';
     if (a.includes('plano')) return 'plan';
     if (a.includes('caso')) return 'case';
+    if (a.includes('defeito') || a.includes('bug')) return 'defect';
+    if (a.includes('requisito')) return 'requirement';
     return 'other';
   };
 
@@ -102,19 +103,21 @@ export const History = () => {
           { id: 'log1', type: 'plan', action: 'Plano criado PT-1', description: 'Plano de Teste criado — Título: Alpha', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'plan', id: 'pt-1' } },
           { id: 'log2', type: 'case', action: 'Caso atualizado CT-2', description: 'Caso de Teste atualizado — Campos: título', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'case', id: 'ct-2' } },
           { id: 'log3', type: 'execution', action: 'Execução criada EX-3', description: 'Execução de Teste criada — Status: not_tested', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'execution', id: 'ex-3' } },
-          { id: 'log4', type: 'other', action: 'Requisito criado RQ-4', description: 'Requisito criado — Título: Beta', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'requirement', id: 'rq-4' } },
-          { id: 'log5', type: 'other', action: 'Defeito criado DF-5', description: 'Defeito criado — Status: open', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'defect', id: 'df-5' } },
+          { id: 'log4', type: 'requirement', action: 'Requisito criado RQ-4', description: 'Requisito criado — Título: Beta', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'requirement', id: 'rq-4' } },
+          { id: 'log5', type: 'defect', action: 'Defeito criado DF-5', description: 'Defeito criado — Status: open', updated_at: now, data: { user_id: mockUser }, meta: { entity: 'defect', id: 'df-5' } },
         ];
         setItems(mockItems);
         setProfilesMap({ [mockUser]: { display_name: 'E2E User', avatar_url: null } });
         setLoading(false);
         return;
       }
-      const twoWeeksAgo = new Date();
-      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-      const start = range?.start ?? twoWeeksAgo;
+      // Range padrão: últimos 90 dias (limite máximo)
+      const daysBack = range?.start ? Math.min(90, Math.ceil((new Date().getTime() - range.start.getTime()) / (1000 * 60 * 60 * 24))) : 90;
+      const start = new Date();
+      start.setDate(start.getDate() - daysBack);
       const end = range?.end ?? new Date();
-      const logs: ActivityLog[] = await getActivityLogs(user!.id, { dateStart: start, dateEnd: end });
+      // Busca logs de TODOS os usuários (sistema completo)
+      const logs: ActivityLog[] = await getActivityLogs('', { dateStart: start, dateEnd: end });
       const historyItems: HistoryItem[] = logs.map((log) => ({
         id: log.id,
         type: deriveTypeFromAction(log.action),
@@ -164,8 +167,18 @@ export const History = () => {
   // Removido: controle de overflow agora centralizado no Layout
 
   useEffect(() => {
-    initFromSearchParams({ setQ, setDateStart, setDateEnd, setTypeFilter, setApplied, setPage });
-  }, [initFromSearchParams]);
+    // Adaptar para novo formato de filtros (days ao invés de dateStart/dateEnd)
+    const params = new URLSearchParams(window.location.search);
+    const qParam = params.get('q') || '';
+    const daysParam = parseInt(params.get('days') || '90', 10);
+    const typeParam = params.get('type') as any || 'all';
+    setQ(qParam);
+    setDaysFilter(isNaN(daysParam) ? 90 : Math.min(90, daysParam));
+    setTypeFilter(typeParam);
+    setApplied({ q: qParam, days: isNaN(daysParam) ? 90 : Math.min(90, daysParam), type: typeParam });
+    const pageParam = parseInt(params.get('page') || '1', 10);
+    if (!isNaN(pageParam)) setPage(pageParam);
+  }, []);
 
   // Sem abas: filtro por tipo é controlado apenas pelo Select acima
 
@@ -175,15 +188,10 @@ export const History = () => {
     let list = items;
     // Tipo
     if (f.type !== 'all') list = list.filter(it => it.type === f.type);
-    // Datas
-    if (f.dateStart) {
-      const s = new Date(f.dateStart + 'T00:00:00');
-      list = list.filter(it => it.updated_at >= s);
-    }
-    if (f.dateEnd) {
-      const e = new Date(f.dateEnd + 'T23:59:59');
-      list = list.filter(it => it.updated_at <= e);
-    }
+    // Filtro por dias (já aplicado no carregamento, mas reforçado aqui)
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - f.days);
+    list = list.filter(it => it.updated_at >= cutoffDate);
     // Busca textual (usuário, ação/tipo, descrição)
     const term = (f.q || '').trim().toLowerCase();
     if (term) {
@@ -235,9 +243,11 @@ export const History = () => {
 
   const getTypeLabel = (type: string) => {
     switch (type) {
-      case 'plan': return 'Plano de Teste';
-      case 'case': return 'Caso de Teste';
+      case 'plan': return 'Plano';
+      case 'case': return 'Caso';
       case 'execution': return 'Execução';
+      case 'defect': return 'Defeito';
+      case 'requirement': return 'Requisito';
       default: return 'Ação';
     }
   };
@@ -253,14 +263,21 @@ export const History = () => {
 
   // Aplicar filtros quando clicado
   const applyFilters = () => {
-    const nextApplied = { q, dateStart: dateStart || undefined, dateEnd: dateEnd || undefined, type: typeFilter as 'all'|'plan'|'case'|'execution' };
+    const nextApplied = { q, days: Math.min(90, daysFilter), type: typeFilter as 'all'|'plan'|'case'|'execution'|'defect'|'requirement' };
     setApplied(nextApplied);
-    const start = dateStart ? new Date(dateStart + 'T00:00:00') : undefined;
-    const end = dateEnd ? new Date(dateEnd + 'T23:59:59') : undefined;
+    const start = new Date();
+    start.setDate(start.getDate() - nextApplied.days);
+    const end = new Date();
     // Recarrega do backend com o range
     loadHistoryData({ start, end });
     setPage(1);
-    writeFromState(nextApplied, 1);
+    // Atualizar URL
+    const params = new URLSearchParams();
+    if (nextApplied.q) params.set('q', nextApplied.q);
+    params.set('days', String(nextApplied.days));
+    params.set('type', nextApplied.type);
+    params.set('page', '1');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   };
 
   /** REMOVIDO: bloco duplicado de filteredItems/totalItems/currentPage/limitedItems */
@@ -304,15 +321,25 @@ export const History = () => {
                 className="h-9"
               />
             </div>
-            <Input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} className="h-9"/>
-            <Input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} className="h-9"/>
-            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'plan' | 'case' | 'execution')}>
+            <Select value={String(daysFilter)} onValueChange={(v) => setDaysFilter(parseInt(v, 10))}>
+              <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Período" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="5">5 dias</SelectItem>
+                <SelectItem value="10">10 dias</SelectItem>
+                <SelectItem value="25">25 dias</SelectItem>
+                <SelectItem value="50">50 dias</SelectItem>
+                <SelectItem value="90">90 dias</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | 'plan' | 'case' | 'execution' | 'defect' | 'requirement')}>
               <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
                 <SelectItem value="plan">Planos</SelectItem>
                 <SelectItem value="case">Casos</SelectItem>
                 <SelectItem value="execution">Execuções</SelectItem>
+                <SelectItem value="defect">Defeitos</SelectItem>
+                <SelectItem value="requirement">Requisitos</SelectItem>
               </SelectContent>
             </Select>
             <Button size="icon" variant="secondary" onClick={applyFilters} aria-label="Aplicar filtros">

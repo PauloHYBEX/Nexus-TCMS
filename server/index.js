@@ -200,6 +200,7 @@ function filterToTableCols(table, obj) {
     'ALTER TABLE profiles ADD COLUMN tags TEXT DEFAULT \'[]\'',
     'ALTER TABLE profiles ADD COLUMN bio TEXT',
     'ALTER TABLE defects ADD COLUMN user_id TEXT',
+    'ALTER TABLE defects ADD COLUMN plan_id TEXT REFERENCES test_plans(id) ON DELETE SET NULL',
     'ALTER TABLE activity_logs ADD COLUMN context TEXT',
     'ALTER TABLE activity_logs ADD COLUMN metadata TEXT DEFAULT \'{}\'',
     'ALTER TABLE projects ADD COLUMN icon TEXT DEFAULT \'\'',

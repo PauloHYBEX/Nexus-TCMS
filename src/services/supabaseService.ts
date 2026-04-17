@@ -90,13 +90,18 @@ export interface ActivityLog {
 }
 
 export const getActivityLogs = async (
-  _userId: string,
+  userId: string,
   opts?: { dateStart?: Date; dateEnd?: Date }
 ): Promise<ActivityLog[]> => {
   let query = supabase
     .from('activity_logs')
     .select('*')
     .order('created_at', { ascending: false });
+
+  // Se userId especificado, filtra por usuário; senão, busca todos (sistema)
+  if (userId) {
+    query = query.eq('user_id', userId);
+  }
 
   if (opts?.dateStart) {
     query = query.gte('created_at', opts.dateStart.toISOString());
@@ -110,6 +115,12 @@ export const getActivityLogs = async (
     console.error('Erro ao buscar activity_logs:', error);
     throw error;
   }
+
+  // Auto-exclusão de logs antigos (>90 dias) - executa em background
+  const ninetyDaysAgo = new Date();
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  deleteOldActivityLogs(ninetyDaysAgo).catch(() => {});
+
   return (data || []).map((r: any) => ({
     id: r.id,
     user_id: r.user_id,
@@ -118,6 +129,21 @@ export const getActivityLogs = async (
     metadata: r.metadata ?? null,
     created_at: new Date(r.created_at)
   }));
+};
+
+// Auto-exclusão de logs antigos
+const deleteOldActivityLogs = async (cutoffDate: Date): Promise<void> => {
+  try {
+    const { error } = await supabase
+      .from('activity_logs')
+      .delete()
+      .lt('created_at', cutoffDate.toISOString());
+    if (error) {
+      console.warn('Erro ao excluir logs antigos:', error);
+    }
+  } catch (e) {
+    console.warn('Erro ao excluir logs antigos:', e);
+  }
 };
 
 // Funções para Planos de Teste

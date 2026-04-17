@@ -87,7 +87,9 @@ class QueryBuilder {
   eq(column: string, value: any) { this.filters.push({ type: 'eq', column, value }); return this; }
   is(column: string, value: any) { this.filters.push({ type: 'eq', column, value }); return this; }
   neq(column: string, value: any) { this.filters.push({ type: 'neq', column, value }); return this; }
+  gt(column: string, value: any) { this.filters.push({ type: 'gt', column, value }); return this; }
   gte(column: string, value: any) { this.filters.push({ type: 'gte', column, value }); return this; }
+  lt(column: string, value: any) { this.filters.push({ type: 'lt', column, value }); return this; }
   lte(column: string, value: any) { this.filters.push({ type: 'lte', column, value }); return this; }
   in(column: string, value: any[]) { this.filters.push({ type: 'in', column, value }); return this; }
   match(value: Record<string, any>) { this.filters.push({ type: 'match', value }); return this; }
