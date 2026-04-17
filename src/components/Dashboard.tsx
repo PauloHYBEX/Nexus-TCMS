@@ -23,7 +23,8 @@ import {
   getTestCasesByProject,
   getTestExecutionsByProject,
   getDefectsByProject,
-  getRequirementsByProject
+  getRequirementsByProject,
+  getPlanLinkedCounts
 } from '@/services/supabaseService';
 import { TestPlan, TestCase, TestExecution, Defect, Requirement } from '@/types';
 import { useDashboardSettings } from '@/hooks/useDashboardSettings';
@@ -69,6 +70,7 @@ export const Dashboard = () => {
   const [executionProgress, setExecutionProgress] = useState<
     { planId: string; title: string; percent: number; total: number; sequence?: number; plan: TestPlan }[]
   >([]);
+  const [planStats, setPlanStats] = useState<Record<string, { cases: number; execs: number }>>({});
 
   useEffect(() => {
     const load = async () => {
@@ -193,14 +195,25 @@ export const Dashboard = () => {
       allItems.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
       setRecentItems(allItems.slice(0, 5));
 
-      // Progresso por Plano (percentual de aprovados entre executados)
+      // Carregar stats dos planos (sincronizado com tela de Planos)
+      const loadPlanStats = async () => {
+        if (!user || plans.length === 0) return;
+        const results = await Promise.all(
+          plans.map(p => getPlanLinkedCounts(user.id, p.id).then(c => ({ id: p.id, cases: c.testCaseCount, execs: c.executionCount })))
+        );
+        const map: Record<string, { cases: number; execs: number }> = {};
+        results.forEach(r => { map[r.id] = { cases: r.cases, execs: r.execs }; });
+        setPlanStats(map);
+      };
+      await loadPlanStats();
+
+      // Progresso por Plano (percentual de execuções vs casos - mesmo cálculo da tela de Planos)
       const progressPerPlan = plans.map((plan) => {
-        const exs = executions.filter((e) => e.plan_id === plan.id);
-        const executed = exs.filter((e) => e.status !== 'not_tested');
-        const passed = exs.filter((e) => e.status === 'passed');
-        const denom = executed.length;
-        const percent = denom === 0 ? 0 : Math.round((passed.length / denom) * 100);
-        return { planId: plan.id, title: plan.title, percent, total: denom, sequence: plan.sequence, plan };
+        const s = planStats[plan.id];
+        const cases = s?.cases || 0;
+        const execs = s?.execs || 0;
+        const percent = cases === 0 ? 0 : Math.min(100, Math.round((execs / cases) * 100));
+        return { planId: plan.id, title: plan.title, percent, total: cases, sequence: plan.sequence, plan };
       })
         .sort((a, b) => b.total - a.total || b.percent - a.percent);
       

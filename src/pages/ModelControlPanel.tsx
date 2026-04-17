@@ -929,9 +929,19 @@ export const ModelControlPanel = () => {
                       <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="auto"><div className="flex items-center gap-1.5"><Sparkles className="h-3 w-3 text-yellow-500" /> Automático</div></SelectItem>
-                        {config?.models.map(m => (
-                          <SelectItem key={m.id} value={m.id}>{m.name} ({providerLabel(m.provider)}){modelHasKey(m) ? ' ✓' : ' ⚠'}</SelectItem>
-                        ))}
+                        {config?.models
+                          .filter(m => !hideInactive || m.active) // Ocultar inativos quando checkbox habilitado
+                          .map(m => (
+                            <SelectItem key={m.id} value={m.id}>
+                              <div className="flex items-center gap-1.5">
+                                <span className={!m.active ? 'text-muted-foreground' : ''}>
+                                  {m.name} ({providerLabel(m.provider)})
+                                </span>
+                                {!m.active && <Badge variant="secondary" className="text-[10px] px-1">Inativo</Badge>}
+                                {modelHasKey(m) ? ' ✓' : ' ⚠'}
+                              </div>
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>

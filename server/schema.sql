@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT DEFAULT '',
   status TEXT DEFAULT 'active',
   color TEXT DEFAULT '#3b82f6',
+  icon TEXT DEFAULT '',
   created_by TEXT REFERENCES profiles(id),
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
