@@ -6,10 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, FileText, Calendar, Sparkles, Download, Search, ListFilter, ArrowUpDown, Edit, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Plus, Search, ListFilter, ArrowUpDown, Edit, Trash2, Sparkles, Download, Calendar, FileText } from 'lucide-react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { UserAvatar } from '@/components/ui/UserAvatar';
-import { cn } from '@/lib/utils';
+import { cn, formatLocalDate } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { getTestPlans, deleteTestPlan, getPlanLinkedCounts } from '@/services/supabaseService';
 import { TestPlan } from '@/types';
@@ -20,8 +22,6 @@ import { ProjectDisplayField } from '@/components/ProjectDisplayField';
 import { StandardButton } from '@/components/StandardButton';
 import { ViewModeToggle } from '@/components/ViewModeToggle';
 import { useToast } from '@/hooks/use-toast';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { DetailModal } from '@/components/DetailModal';
 import { useProject } from '@/contexts/ProjectContext';
 import { useStatusOptions } from '@/hooks/useStatusOptions';
@@ -414,7 +414,7 @@ export const TestPlans = () => {
         Título: plan.title,
         Projeto: getProjectLabel(plan.project_id),
         Status: getStatusLabel(plan.status),
-        Criação: plan.created_at.toLocaleDateString('pt-BR')
+        Criação: formatLocalDate(plan.created_at)
       }));
 
       if (format === 'pdf') {
@@ -472,7 +472,7 @@ export const TestPlans = () => {
           plan.title,
           getProjectLabel(plan.project_id),
           getStatusLabel(plan.status),
-          plan.created_at.toLocaleDateString('pt-BR')
+          formatLocalDate(plan.created_at)
         ])
       };
 
@@ -671,7 +671,7 @@ export const TestPlans = () => {
                     <div className="mt-auto flex items-center justify-between">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        {plan.created_at.toLocaleDateString('pt-BR')}
+                        {formatLocalDate(plan.created_at)}
                       </div>
                       <UserAvatar userId={plan.user_id} />
                     </div>
@@ -761,7 +761,7 @@ export const TestPlans = () => {
 
                           {/* Data */}
                           <div className="text-xs text-muted-foreground">
-                            {plan.created_at.toLocaleDateString('pt-BR')}
+                            {formatLocalDate(plan.created_at)}
                           </div>
 
                           {/* Ações */}

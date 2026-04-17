@@ -8,6 +8,7 @@ import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types'
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { formatLocalDateTime } from '@/lib/utils';
 
 const userRoleLabel: Record<string, string> = {
   master: 'Master',
@@ -99,13 +100,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   }, [item]);
 
   const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(new Date(date));
+    return formatLocalDateTime(date);
   };
 
   // Classes para status de Plano/Caso (reuso do padrão aplicado em TestPlans)

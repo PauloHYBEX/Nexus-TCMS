@@ -102,28 +102,44 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     ? undefined
     : availableModels.find(m => m.id === formData.selectedModel);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (selectedFile.type === 'text/plain') {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const content = (event.target?.result as string) || '';
-          setFormData(prev => ({ ...prev, requirements: content }));
-        };
-        reader.readAsText(selectedFile);
-      } else {
-        const isPptx = selectedFile.name.toLowerCase().endsWith('.pptx');
-        toast({
-          title: 'Aviso',
-          description: isPptx
-            ? 'Arquivo PowerPoint detectado. Copie o conteúdo relevante dos slides e cole nos campos abaixo.'
-            : 'Para arquivos que não são texto puro, cole o conteúdo relevante nos campos abaixo (ex.: Requisitos Específicos).',
-          variant: 'default'
-        });
-      }
+    if (!selectedFile) return;
+    setFile(selectedFile);
+    const isPptx = selectedFile.name.toLowerCase().endsWith('.pptx');
+    const isText = selectedFile.type === 'text/plain';
+    // Arquivos de texto puro: ler diretamente
+    if (isText) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const content = (event.target?.result as string) || '';
+        setFormData(prev => ({ ...prev, requirements: content }));
+        toast({ title: 'Documento carregado', description: `${selectedFile.name} carregado com sucesso.` });
+      };
+      reader.readAsText(selectedFile);
+      return;
     }
+    // PPTX e outros: enviar para o servidor extrair
+    if (isPptx) {
+      try {
+        const form = new FormData();
+        form.append('file', selectedFile);
+        const res = await fetch('/api/documents/extract', { method: 'POST', body: form, credentials: 'include' });
+        if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair texto');
+        const { text } = await res.json();
+        setFormData(prev => ({ ...prev, requirements: text }));
+        toast({ title: 'PowerPoint carregado', description: `${selectedFile.name} analisado. Texto extraído automaticamente.` });
+      } catch (err: any) {
+        toast({ title: 'Erro ao processar', description: err?.message || 'Falha ao extrair conteúdo.', variant: 'destructive' });
+      }
+      return;
+    }
+    // Outros formatos: avisar usuário
+    toast({
+      title: 'Aviso',
+      description: 'Para arquivos que não são texto puro ou PowerPoint, cole o conteúdo relevante nos campos abaixo (ex.: Requisitos Específicos).',
+      variant: 'default'
+    });
   };
 
   const loadCases = async (planId: string) => {

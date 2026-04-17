@@ -9,6 +9,8 @@ import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { getClient, db, query } from './db.js';
+import JSZip from 'jszip';
+import { DOMParser } from '@xmldom/xmldom';
 
 dotenv.config();
 
@@ -344,7 +346,12 @@ app.post('/api/rpc/:name', requireUser, async (req, res, next) => {
     const { name } = req.params;
     if (name === 'list_all_users') {
       const { rows } = query('SELECT id, email, display_name, role, created_at FROM profiles ORDER BY display_name, email');
-      return res.json({ data: rows, error: null });
+      // Retorna datas em formato ISO para parse correto no frontend
+      const rowsWithIsoDates = rows.map(r => ({
+        ...r,
+        created_at: r.created_at ? new Date(r.created_at).toISOString() : r.created_at
+      }));
+      return res.json({ data: rowsWithIsoDates, error: null });
     }
     if (name === 'sync_profiles_from_auth') {
       return res.json({ data: { synced: true }, error: null });
@@ -415,8 +422,62 @@ app.post('/api/reports/aggregate', requireUser, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// Extrai texto de arquivos .pptx
+async function extractTextFromPptx(filePath) {
+  try {
+    const data = await fs.readFile(filePath);
+    const zip = await JSZip.loadAsync(data);
+    const slideFiles = Object.keys(zip.files).filter(n => n.startsWith('ppt/slides/slide') && n.endsWith('.xml'));
+    slideFiles.sort((a, b) => {
+      const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || '0', 10);
+      const numB = parseInt(b.match(/slide(\d+)\.xml$/)?.[1] || '0', 10);
+      return numA - numB;
+    });
+    const texts = [];
+    for (const slideFile of slideFiles) {
+      const xml = await zip.files[slideFile].async('text');
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(xml, 'text/xml');
+      const tNodes = doc.getElementsByTagName('a:t');
+      const slideTexts = [];
+      for (let i = 0; i < tNodes.length; i++) {
+        const text = tNodes[i].textContent || '';
+        if (text.trim()) slideTexts.push(text);
+      }
+      if (slideTexts.length) {
+        texts.push(`=== Slide ${slideFile.match(/slide(\d+)\.xml$/)?.[1] || '?'} ===\n${slideTexts.join('\n')}`);
+      }
+    }
+    return texts.join('\n\n');
+  } catch (e) {
+    throw new Error(`Erro ao extrair texto do PPTX: ${e.message}`);
+  }
+}
+
 app.post('/api/storage/upload', requireUser, upload.single('file'), async (req, res) => {
   res.json({ path: req.file.filename, publicUrl: '/uploads/' + req.file.filename });
+});
+
+// Endpoint para extrair texto de documentos (PPTX, DOCX, etc)
+app.post('/api/documents/extract', requireUser, upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: { message: 'Nenhum arquivo enviado.' } });
+    const filePath = req.file.path;
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    let text = '';
+    if (ext === '.pptx') {
+      text = await extractTextFromPptx(filePath);
+    } else if (ext === '.txt' || req.file.mimetype === 'text/plain') {
+      text = await fs.readFile(filePath, 'utf-8');
+    } else {
+      // Limpar arquivo não suportado
+      await fs.unlink(filePath).catch(() => {});
+      return res.status(400).json({ error: { message: 'Formato não suportado. Use .pptx ou .txt' } });
+    }
+    // Limpar arquivo temporário
+    await fs.unlink(filePath).catch(() => {});
+    res.json({ text, filename: req.file.originalname, format: ext.slice(1) });
+  } catch (error) { next(error); }
 });
 
 app.use((error, _req, res, _next) => {
