@@ -38,6 +38,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     selectedModel: 'auto'
   });
   const [file, setFile] = useState<File | null>(null);
+  const [images, setImages] = useState<{ name: string; dataUrl: string }[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -106,6 +107,7 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     setFile(selectedFile);
+    setImages([]); // Reset imagens anteriores
     const isPptx = selectedFile.name.toLowerCase().endsWith('.pptx');
     const isText = selectedFile.type === 'text/plain';
     // Arquivos de texto puro: ler diretamente
@@ -126,9 +128,17 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
         form.append('file', selectedFile);
         const res = await fetch('/api/documents/extract', { method: 'POST', body: form, credentials: 'include' });
         if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair texto');
-        const { text } = await res.json();
+        const { text, images: extractedImages } = await res.json();
         setFormData(prev => ({ ...prev, requirements: text }));
-        toast({ title: 'PowerPoint carregado', description: `${selectedFile.name} analisado. Texto extraído automaticamente.` });
+        if (extractedImages && extractedImages.length > 0) {
+          setImages(extractedImages);
+          toast({
+            title: 'PowerPoint analisado',
+            description: `${extractedImages.length} imagem(s) e texto extraídos. A IA analisará o conteúdo visual também.`
+          });
+        } else {
+          toast({ title: 'PowerPoint carregado', description: `${selectedFile.name} analisado. Texto extraído automaticamente.` });
+        }
       } catch (err: any) {
         toast({ title: 'Erro ao processar', description: err?.message || 'Falha ao extrair conteúdo.', variant: 'destructive' });
       }
@@ -166,6 +176,8 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
       appDescription: formData.description,
       additionalContext: formData.context,
       requirements: formData.requirements,
+      // Incluir imagens extraídas do PPTX para análise visual pela IA
+      images: images.length > 0 ? images.map(img => img.dataUrl) : undefined,
     };
 
     if (formData.type === 'execution') {
@@ -380,6 +392,40 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
                 className="text-sm resize-none"
                 placeholder="Liste requisitos ou cenários específicos a serem cobertos..."
               />
+            </div>
+          )}
+
+          {/* Preview das imagens extraídas do PPTX */}
+          {images.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Imagens do documento ({images.length})</Label>
+                <button
+                  type="button"
+                  onClick={() => setImages([])}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  Remover imagens
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-muted/30 rounded-md">
+                {images.map((img, idx) => (
+                  <div key={idx} className="relative group">
+                    <img
+                      src={img.dataUrl}
+                      alt={`Imagem ${idx + 1}`}
+                      className="h-16 w-16 object-cover rounded border border-border/60"
+                      title={img.name}
+                    />
+                    <span className="absolute -top-1 -right-1 h-4 w-4 bg-brand text-white text-[10px] rounded-full flex items-center justify-center">
+                      {idx + 1}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Estas imagens serão enviadas junto com o texto para análise pela IA.
+              </p>
             </div>
           )}
 

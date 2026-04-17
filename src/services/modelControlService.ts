@@ -5,7 +5,7 @@ import {
   AIModelConfig,
   AIModelTask
 } from '@/types';
-import { generateText, generateStructuredContent } from '@/integrations/gemini/client';
+import { generateText, generateStructuredContent, generateStructuredContentWithImages } from '@/integrations/gemini/client';
 import { openAIGenerateText } from '@/integrations/openai/client';
 import { anthropicGenerateText } from '@/integrations/anthropic/client';
 import { groqGenerateText } from '@/integrations/groq/client';
@@ -657,10 +657,23 @@ export const executeTask = async (
       const geminiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
         ? model.settings.apiModel.trim()
         : model.id;
+
+      // Verificar se há imagens nas variáveis para análise multimodal
+      const hasImages = variables.images && Array.isArray(variables.images) && variables.images.length > 0;
+
       if (isGeneralCompletion) {
         return generateText(prompt, geminiModelName);
       }
-      const raw = await generateStructuredContent<unknown>(prompt, geminiModelName);
+
+      let raw: unknown;
+      if (hasImages) {
+        // Usar função multimodal quando houver imagens
+        const imageUrls = variables.images as string[];
+        raw = await generateStructuredContentWithImages<unknown>(prompt, imageUrls, geminiModelName);
+      } else {
+        raw = await generateStructuredContent<unknown>(prompt, geminiModelName);
+      }
+
       if (schemaId) {
         try {
           const valid = validateWithSchema(schemaId, raw);

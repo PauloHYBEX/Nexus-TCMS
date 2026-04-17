@@ -422,11 +422,13 @@ app.post('/api/reports/aggregate', requireUser, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Extrai texto de arquivos .pptx
-async function extractTextFromPptx(filePath) {
+// Extrai texto e imagens de arquivos .pptx
+async function extractFromPptx(filePath) {
   try {
     const data = await fs.readFile(filePath);
     const zip = await JSZip.loadAsync(data);
+
+    // Extrair texto dos slides
     const slideFiles = Object.keys(zip.files).filter(n => n.startsWith('ppt/slides/slide') && n.endsWith('.xml'));
     slideFiles.sort((a, b) => {
       const numA = parseInt(a.match(/slide(\d+)\.xml$/)?.[1] || '0', 10);
@@ -448,9 +450,36 @@ async function extractTextFromPptx(filePath) {
         texts.push(`=== Slide ${slideFile.match(/slide(\d+)\.xml$/)?.[1] || '?'} ===\n${slideTexts.join('\n')}`);
       }
     }
-    return texts.join('\n\n');
+
+    // Extrair imagens (ppt/media/)
+    const images = [];
+    const imageExts = ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'];
+    const mediaFiles = Object.keys(zip.files).filter(n => {
+      const lower = n.toLowerCase();
+      return n.startsWith('ppt/media/') && imageExts.some(ext => lower.endsWith(ext));
+    });
+
+    for (const mediaFile of mediaFiles) {
+      try {
+        const ext = path.extname(mediaFile).toLowerCase().replace('.', '');
+        const mime = ext === 'jpg' ? 'jpeg' : ext;
+        const buffer = await zip.files[mediaFile].async('nodebuffer');
+        const base64 = buffer.toString('base64');
+        // Limitar tamanho da imagem (max 2MB base64 ~ 1.5MB binário)
+        if (base64.length > 2 * 1024 * 1024) continue;
+        images.push({
+          name: path.basename(mediaFile),
+          dataUrl: `data:image/${mime};base64,${base64}`,
+          slide: null // Podemos mapear para slides posteriorente se necessário
+        });
+      } catch (imgErr) {
+        console.warn(`Erro ao extrair imagem ${mediaFile}:`, imgErr.message);
+      }
+    }
+
+    return { text: texts.join('\n\n'), images };
   } catch (e) {
-    throw new Error(`Erro ao extrair texto do PPTX: ${e.message}`);
+    throw new Error(`Erro ao extrair conteúdo do PPTX: ${e.message}`);
   }
 }
 
@@ -458,25 +487,28 @@ app.post('/api/storage/upload', requireUser, upload.single('file'), async (req, 
   res.json({ path: req.file.filename, publicUrl: '/uploads/' + req.file.filename });
 });
 
-// Endpoint para extrair texto de documentos (PPTX, DOCX, etc)
+// Endpoint para extrair conteúdo de documentos (PPTX com imagens, TXT, etc)
 app.post('/api/documents/extract', requireUser, upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: { message: 'Nenhum arquivo enviado.' } });
     const filePath = req.file.path;
     const ext = path.extname(req.file.originalname).toLowerCase();
-    let text = '';
+    let result = { text: '', images: [] };
     if (ext === '.pptx') {
-      text = await extractTextFromPptx(filePath);
+      result = await extractFromPptx(filePath);
     } else if (ext === '.txt' || req.file.mimetype === 'text/plain') {
-      text = await fs.readFile(filePath, 'utf-8');
+      result.text = await fs.readFile(filePath, 'utf-8');
     } else {
-      // Limpar arquivo não suportado
       await fs.unlink(filePath).catch(() => {});
       return res.status(400).json({ error: { message: 'Formato não suportado. Use .pptx ou .txt' } });
     }
-    // Limpar arquivo temporário
     await fs.unlink(filePath).catch(() => {});
-    res.json({ text, filename: req.file.originalname, format: ext.slice(1) });
+    res.json({
+      text: result.text,
+      images: result.images,
+      filename: req.file.originalname,
+      format: ext.slice(1)
+    });
   } catch (error) { next(error); }
 });
 

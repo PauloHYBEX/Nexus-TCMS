@@ -126,9 +126,71 @@ export const generateText = async (prompt: string, modelName?: string, task?: st
   }
 };
 
+// Generate content with images (multimodal)
+export const generateWithImages = async (
+  prompt: string,
+  imageDataUrls: string[],
+  modelName?: string,
+  task?: string
+): Promise<string> => {
+  try {
+    const model = getGeminiModel(modelName, task);
+
+    // Converter data URLs para parts que o Gemini aceita
+    const imageParts = imageDataUrls.map(dataUrl => {
+      const base64Data = dataUrl.split(',')[1];
+      const mimeMatch = dataUrl.match(/data:([^;]+);/);
+      const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+      return {
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      };
+    });
+
+    const result = await model.generateContent([prompt, ...imageParts]);
+    const response = await result.response;
+    return response.text();
+  } catch (error: any) {
+    console.error('Error generating content with images:', error);
+    if (error.message?.includes('API_KEY_INVALID')) {
+      throw new Error('Chave API do Gemini inválida.');
+    } else if (error.message?.includes('unsupported')) {
+      throw new Error('O modelo selecionado não suporta análise de imagens. Use gemini-2.0-flash ou gemini-1.5-flash.');
+    }
+    throw new Error(`Erro ao processar imagens: ${error.message || 'Erro desconhecido'}`);
+  }
+};
+
+// Generate structured content with images (multimodal)
+export const generateStructuredContentWithImages = async <T>(
+  prompt: string,
+  imageDataUrls: string[],
+  modelName?: string,
+  task?: string
+): Promise<T> => {
+  try {
+    const textResponse = await generateWithImages(prompt, imageDataUrls, modelName, task);
+    const jsonMatch = textResponse.match(/```json\s*([\s\S]*?)\s*```/) ||
+                      textResponse.match(/\{[\s\S]*\}/);
+
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0].replace(/```json|```/g, '').trim()) as T;
+    }
+    return JSON.parse(textResponse) as T;
+  } catch (error: any) {
+    console.error('Error generating structured content with images:', error);
+    if (error instanceof SyntaxError) {
+      throw new Error(`Erro ao analisar resposta JSON. A resposta pode estar malformada: ${error.message}`);
+    }
+    throw error;
+  }
+};
+
 // Generate structured content (e.g., JSON)
 export const generateStructuredContent = async <T>(
-  prompt: string, 
+  prompt: string,
   modelName?: string,
   task?: string
 ): Promise<T> => {
