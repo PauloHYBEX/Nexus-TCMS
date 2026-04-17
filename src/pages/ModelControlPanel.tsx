@@ -77,6 +77,7 @@ export const ModelControlPanel = () => {
   const [inlineForms, setInlineForms] = useState<Record<string, Partial<AIModel>>>({});
   const [showApiKeyFor, setShowApiKeyFor] = useState<Record<string, boolean>>({});
   const [capInput, setCapInput] = useState<Record<string, string>>({});
+  const [hideInactive, setHideInactive] = useState(false); // Ocultar modelos inativos
 
   // Fetch provider models
   const [fetchedModels, setFetchedModels] = useState<Record<string, ProviderModel[]>>({}); // keyed by ctx ('new' or modelId)
@@ -359,30 +360,68 @@ export const ModelControlPanel = () => {
         )}
 
         {provider !== 'other' && (
-          <div>
-            <Label className="text-xs">Slug do Modelo (ID exato da API)</Label>
-            {fetchedModels[modelId]?.length > 0 ? (
-              <Select value={(form.settings?.apiModel as string) || (provider === 'gemini' ? '' : '')} onValueChange={v => provider === 'gemini' ? updateInlineForm(modelId, { id: v, settings: { ...(form.settings || {}), apiModel: v } }) : patchSettings({ apiModel: v })}>
-                <SelectTrigger className="h-8 text-sm font-mono"><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {fetchedModels[modelId].map(m => (
-                    <SelectItem key={m.id} value={m.id}>
-                      <div><div className="text-sm font-mono">{m.id}</div>{m.name !== m.id && <div className="text-xs text-muted-foreground">{m.name}</div>}</div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <>
-                <Input value={provider === 'gemini' ? (form.id || modelId) : ((form.settings?.apiModel as string) || '')} onChange={e => provider === 'gemini' ? updateInlineForm(modelId, { id: e.target.value }) : patchSettings({ apiModel: e.target.value })} className="h-8 text-sm font-mono" placeholder={provider === 'gemini' ? 'gemini-2.0-flash' : (PROVIDER_SUGGESTIONS[provider]?.[0] || '')} />
-                {PROVIDER_SUGGESTIONS[provider]?.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {PROVIDER_SUGGESTIONS[provider].map(s => (
-                      <button key={s} type="button" className="text-xs px-2 py-0.5 rounded bg-muted hover:bg-accent border text-muted-foreground" onClick={() => provider === 'gemini' ? updateInlineForm(modelId, { id: s }) : patchSettings({ apiModel: s })}>{s}</button>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs">Slug do Modelo (ID exato da API)</Label>
+              {fetchedModels[modelId]?.length > 0 ? (
+                <Select value={(form.settings?.apiModel as string) || (provider === 'gemini' ? '' : '')} onValueChange={v => provider === 'gemini' ? updateInlineForm(modelId, { id: v, settings: { ...(form.settings || {}), apiModel: v } }) : patchSettings({ apiModel: v })}>
+                  <SelectTrigger className="h-8 text-sm font-mono"><SelectValue placeholder="Selecione o modelo" /></SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {fetchedModels[modelId].map(m => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <div><div className="text-sm font-mono">{m.id}</div>{m.name !== m.id && <div className="text-xs text-muted-foreground">{m.name}</div>}</div>
+                      </SelectItem>
                     ))}
-                  </div>
-                )}
-              </>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <>
+                  <Input value={provider === 'gemini' ? (form.id || modelId) : ((form.settings?.apiModel as string) || '')} onChange={e => provider === 'gemini' ? updateInlineForm(modelId, { id: e.target.value }) : patchSettings({ apiModel: e.target.value })} className="h-8 text-sm font-mono" placeholder={provider === 'gemini' ? 'gemini-2.0-flash' : (PROVIDER_SUGGESTIONS[provider]?.[0] || '')} />
+                  {PROVIDER_SUGGESTIONS[provider]?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {PROVIDER_SUGGESTIONS[provider].map(s => (
+                        <button key={s} type="button" className="text-xs px-2 py-0.5 rounded bg-muted hover:bg-accent border text-muted-foreground" onClick={() => provider === 'gemini' ? updateInlineForm(modelId, { id: s }) : patchSettings({ apiModel: s })}>{s}</button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* OpenRouter: Modo Adaptativo com Fallback de Slugs */}
+            {provider === 'openrouter' && (
+              <div className="border rounded p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium flex items-center gap-1">
+                    <RefreshCcw className="h-3 w-3" />
+                    Modo Adaptativo (Fallback de Slugs)
+                  </Label>
+                  <Switch
+                    checked={form.settings?.adaptiveMode === true || (Array.isArray(form.settings?.adaptiveSlugs) && form.settings.adaptiveSlugs.length > 0)}
+                    onCheckedChange={(checked) => patchSettings({ adaptiveMode: checked })}
+                    className="h-4 w-7"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Quando ativado, tenta múltiplos slugs automaticamente se o principal falhar.
+                </p>
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Slugs Alternativos (um por linha)</Label>
+                  <Textarea
+                    value={(form.settings?.adaptiveSlugs as string[] || []).join('\n')}
+                    onChange={e => {
+                      const slugs = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+                      patchSettings({ adaptiveSlugs: slugs.length > 0 ? slugs : undefined });
+                    }}
+                    placeholder="google/gemma-2-9b-it:free&#10;meta-llama/llama-3.1-70b-instruct:free&#10;mistralai/mistral-7b-instruct:free"
+                    className="text-xs font-mono min-h-[80px]"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Slugs personalizados para tentar quando o principal falhar. Se deixar vazio, usa fallbacks automáticos.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -577,6 +616,8 @@ export const ModelControlPanel = () => {
   );
 
   const activeModelsWithKey = config?.models.filter(m => m.active && modelHasKey(m)).length ?? 0;
+  const visibleModelsCount = config?.models.filter(m => !hideInactive || m.active).length ?? 0;
+  const totalModelsCount = config?.models.length ?? 0;
 
   return (
     <PermissionGuard requiredPermission="can_access_model_control">
@@ -614,10 +655,22 @@ export const ModelControlPanel = () => {
                   <div className="flex items-center gap-2">
                     <Sparkles className="h-5 w-5 text-brand" />
                     <h3 className="text-lg font-semibold">Modelos</h3>
-                    <Badge variant="secondary">{config?.models.length ?? 0} cadastrados</Badge>
+                    <Badge variant="secondary">
+                      {hideInactive && visibleModelsCount !== totalModelsCount
+                        ? `${visibleModelsCount} visíveis de ${totalModelsCount}`
+                        : `${totalModelsCount} cadastrados`}
+                    </Badge>
                     <Badge variant="outline" className="text-green-600 border-green-600">{activeModelsWithKey} prontos</Badge>
                   </div>
                   <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 mr-2">
+                      <Checkbox
+                        id="hide-inactive"
+                        checked={hideInactive}
+                        onCheckedChange={(checked) => setHideInactive(checked === true)}
+                      />
+                      <Label htmlFor="hide-inactive" className="text-sm cursor-pointer">Ocultar inativos</Label>
+                    </div>
                     <Button size="sm" className="flex items-center gap-1" onClick={e => { e.stopPropagation(); startAddingModel(); }} disabled={!hasPermission('can_configure_ai_models')}>
                       <Plus className="h-3.5 w-3.5" /><span className="hidden sm:inline">Adicionar</span>
                     </Button>
@@ -631,7 +684,9 @@ export const ModelControlPanel = () => {
 
                 {/* Model list */}
                 <div className="space-y-1.5">
-                  {config?.models.map(model => {
+                  {config?.models
+                    .filter(model => !hideInactive || model.active)
+                    .map(model => {
                     const isExpanded = expandedModelId === model.id;
                     const hasKey = modelHasKey(model);
                     const form = inlineForms[model.id];

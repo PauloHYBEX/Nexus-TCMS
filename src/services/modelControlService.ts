@@ -11,6 +11,7 @@ import { anthropicGenerateText } from '@/integrations/anthropic/client';
 import { groqGenerateText } from '@/integrations/groq/client';
 import { ollamaGenerateText } from '@/integrations/ollama/client';
 import { openRouterGenerateText } from '@/integrations/openrouter/client';
+import { openRouterGenerateTextAdaptive } from '@/integrations/openrouter/adaptive';
 import { validateWithSchema, tryRepairWithSchema, SchemaId } from '@/services/aiSchemas';
 
 // Local storage keys (derivadas dinamicamente para segurança)
@@ -780,7 +781,37 @@ export const executeTask = async (
         ? model.settings.apiModel.trim()
         : model.id;
       const apiKey = getStoredApiKey(model.id) || model.apiKey;
-      const text = await openRouterGenerateText(prompt, apiModelName, apiKey);
+
+      // Verifica se há slugs alternativos configurados para fallback
+      const adaptiveSlugs = model.settings?.adaptiveSlugs;
+      const customSlugs = Array.isArray(adaptiveSlugs)
+        ? adaptiveSlugs.filter((s: unknown) => typeof s === 'string')
+        : undefined;
+
+      // Usa modo adaptativo quando houver slugs customizados ou quando explícito
+      const useAdaptive = model.settings?.adaptiveMode === true || customSlugs?.length > 0;
+
+      let text: string;
+
+      if (useAdaptive) {
+        // Modo adaptativo: tenta múltiplos slugs
+        const result = await openRouterGenerateTextAdaptive(prompt, apiModelName, apiKey, {
+          customSlugs,
+          temperature: 0.7,
+          maxRetries: 3,
+          onSlugAttempt: (slug, attempt, total) => {
+            console.debug(`[OpenRouter Adaptive] Tentativa ${attempt}/${total}: ${slug}`);
+          },
+          onFallback: (failed, next) => {
+            console.debug(`[OpenRouter Adaptive] ${failed} falhou, tentando ${next}`);
+          },
+        });
+        text = result.content;
+      } else {
+        // Modo simples: um único slug
+        text = await openRouterGenerateText(prompt, apiModelName, apiKey);
+      }
+
       if (isGeneralCompletion) return text;
       try {
         const parsed = parseJsonFromText<unknown>(text);
