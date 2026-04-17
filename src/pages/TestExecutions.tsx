@@ -5,11 +5,11 @@ import { useVirtualTableHeight } from '@/hooks/useVirtualTableHeight';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, Calendar, Sparkles } from 'lucide-react';
+import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Download, Calendar, Sparkles, Bug as BugIcon } from 'lucide-react';
 import { StatusDot } from '@/components/ui/StatusDot';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/hooks/useAuth';
-import { getTestExecutions, getTestExecutionsByProject, getTestPlansByIds, getTestCasesByIds, deleteTestExecution } from '@/services/supabaseService';
+import { getTestExecutions, getTestExecutionsByProject, getTestPlansByIds, getTestCasesByIds, deleteTestExecution, getDefects, createDefect } from '@/services/supabaseService';
 import { TestExecution } from '@/types';
 import { TestExecutionForm } from '@/components/forms/TestExecutionForm';
 import { DetailModal } from '@/components/DetailModal';
@@ -23,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { executionStatusBadgeClass, executionStatusLabel } from '@/lib/labels';
 import { useProject } from '@/contexts/ProjectContext';
+import { InfoPill } from '@/components/InfoPill';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -76,8 +77,15 @@ export const TestExecutions = () => {
   // Mapas para enriquecer colunas (plano/caso)
   const [planMap, setPlanMap] = useState<Record<string, { id: string; sequence?: number; project_id: string }>>({});
   const [caseMap, setCaseMap] = useState<Record<string, { id: string; sequence?: number }>>({});
+  // Defeitos por execução/caso
+  const [defectsMap, setDefectsMap] = useState<Record<string, { count: number; defects: Array<{ id: string; title: string; status: string; severity?: string }> }>>({});
   // Exclusão
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [showReportBugModal, setShowReportBugModal] = useState(false);
+  const [executionToReport, setExecutionToReport] = useState<TestExecution | null>(null);
+  const [bugTitle, setBugTitle] = useState('');
+  const [bugDescription, setBugDescription] = useState('');
+  const [bugSeverity, setBugSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [deletingExecutionId, setDeletingExecutionId] = useState<string | null>(null);
 
   // Tipagem e guarda para status
@@ -270,6 +278,24 @@ export const TestExecutions = () => {
       const cMap: Record<string, { id: string; sequence?: number }> = {};
       cases.forEach(c => { cMap[c.id] = { id: c.id, sequence: c.sequence }; });
       setCaseMap(cMap);
+
+      // Carregar defeitos por caso para mostrar contador de bugs
+      if (uniqueCaseIds.length > 0 && user) {
+        try {
+          const allDefects = await getDefects(user.id);
+          const dMap: Record<string, { count: number; defects: Array<{ id: string; title: string; status: string; severity?: string }> }> = {};
+          data.forEach(exec => {
+            const caseDefects = allDefects.filter(d => d.case_id === exec.case_id && d.status !== 'closed');
+            dMap[exec.id] = {
+              count: caseDefects.length,
+              defects: caseDefects.map(d => ({ id: d.id, title: d.title, status: d.status, severity: d.severity }))
+            };
+          });
+          setDefectsMap(dMap);
+        } catch (e) {
+          console.warn('Erro ao carregar defeitos:', e);
+        }
+      }
     } catch (error) {
       console.error('Erro ao carregar execuções:', error);
       setExecutions([]);
@@ -658,9 +684,23 @@ export const TestExecutions = () => {
                       </p>
                     )}
                     <div className="mt-auto flex items-center justify-between">
-                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(execution.executed_at).toLocaleDateString('pt-BR')}
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(execution.executed_at).toLocaleDateString('pt-BR')}
+                        </div>
+                        {/* InfoPill de bugs no card */}
+                        <InfoPill
+                          icon={BugIcon}
+                          value={defectsMap[execution.id]?.count || 0}
+                          title={defectsMap[execution.id]?.count ? `${defectsMap[execution.id]?.count} defeito(s)` : 'Nenhum defeito'}
+                          variant={defectsMap[execution.id]?.count ? 'attention' : 'default'}
+                          onClick={() => {
+                            setExecutionToReport(execution);
+                            setShowReportBugModal(true);
+                          }}
+                          ariaLabel="Reportar bug"
+                        />
                       </div>
                       <UserAvatar userId={execution.user_id} name={execution.executed_by} />
                     </div>
@@ -676,41 +716,42 @@ export const TestExecutions = () => {
           <div className="space-y-2">
             {sortedExecutions.length > 0 ? (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Header da tabela */}
-                <div className="grid grid-cols-[80px_80px_4fr_2fr_80px_110px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {/* Header da tabela - ajustado para compacto com coluna Report */}
+                <div className="grid grid-cols-[70px_70px_2fr_100px_60px_90px_70px_72px] items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <div>ID</div>
                   <div>Caso</div>
-                  <div>Plano de Teste</div>
+                  <div>Plano</div>
                   <div>Status</div>
                   <div className="text-center">Executor</div>
                   <div>Data</div>
+                  <div className="text-center">Report</div>
                   <div className="flex justify-end">Ações</div>
                 </div>
-                {/* Linhas */}
+                {/* Linhas - mais compactas */}
                 <div className="divide-y divide-border">
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[80px_80px_4fr_2fr_80px_110px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[70px_70px_2fr_100px_60px_90px_70px_72px] items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
                       <div>
-                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-brand/10 text-brand px-1.5 py-0.5 rounded">
                           {exeLabel(execution)}
                         </span>
                       </div>
 
                       {/* ID Caso */}
                       <div>
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
                           {caseLabel(execution.case_id)}
                         </span>
                       </div>
 
-                      {/* Plano */}
+                      {/* Plano - truncado */}
                       <div className="min-w-0">
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded truncate block">
                           {planLabel(execution.plan_id)}
                         </span>
                       </div>
@@ -720,14 +761,29 @@ export const TestExecutions = () => {
                         <StatusDot status={execution.status} label={executionStatusLabel(execution.status as any)} />
                       </div>
 
-                      {/* Avatar executor */}
+                      {/* Avatar executor - menor */}
                       <div className="flex justify-center">
-                        <UserAvatar userId={execution.user_id} name={execution.executed_by} />
+                        <UserAvatar userId={execution.user_id} name={execution.executed_by} size="sm" />
                       </div>
 
-                      {/* Data */}
+                      {/* Data - mais compacta */}
                       <div className="text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(execution.executed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </div>
+
+                      {/* Report - InfoPill de bugs */}
+                      <div className="flex justify-center">
+                        <InfoPill
+                          icon={BugIcon}
+                          value={defectsMap[execution.id]?.count || 0}
+                          title={defectsMap[execution.id]?.count ? `${defectsMap[execution.id]?.count} defeito(s) aberto(s)` : 'Nenhum defeito'}
+                          variant={defectsMap[execution.id]?.count ? 'attention' : 'default'}
+                          onClick={() => {
+                            setExecutionToReport(execution);
+                            setShowReportBugModal(true);
+                          }}
+                          ariaLabel="Reportar bug"
+                        />
                       </div>
 
                       {/* Ações */}
@@ -878,6 +934,106 @@ export const TestExecutions = () => {
             <DialogDescription className="sr-only">Gerar execução de teste com inteligência artificial</DialogDescription>
           </DialogHeader>
           <AIGeneratorForm initialType="execution" onSuccess={() => { setShowAIModal(false); loadExecutions(); }} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Reportar Bug */}
+      <Dialog open={showReportBugModal} onOpenChange={setShowReportBugModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BugIcon className="h-5 w-5 text-destructive" />
+              Reportar Defeito
+            </DialogTitle>
+            <DialogDescription>
+              Criar um novo defeito vinculado ao caso de teste {executionToReport ? caseLabel(executionToReport.case_id) : ''}.
+              <br />
+              <span className="text-xs text-muted-foreground">
+                Este defeito será automaticamente vinculado na Matriz de Rastreabilidade.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Título do Defeito</label>
+              <Input
+                value={bugTitle}
+                onChange={(e) => setBugTitle(e.target.value)}
+                placeholder="Descreva o defeito encontrado"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Descrição</label>
+              <textarea
+                value={bugDescription}
+                onChange={(e) => setBugDescription(e.target.value)}
+                placeholder="Detalhes do problema, passos para reproduzir, resultado esperado..."
+                className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Severidade</label>
+              <div className="flex gap-2">
+                {(['low', 'medium', 'high', 'critical'] as const).map((sev) => (
+                  <button
+                    key={sev}
+                    onClick={() => setBugSeverity(sev)}
+                    className={`px-3 py-1.5 text-xs rounded-md border ${
+                      bugSeverity === sev
+                        ? 'bg-destructive text-destructive-foreground border-destructive'
+                        : 'bg-background text-foreground border-input hover:bg-muted'
+                    }`}
+                  >
+                    {sev === 'low' && 'Baixa'}
+                    {sev === 'medium' && 'Média'}
+                    {sev === 'high' && 'Alta'}
+                    {sev === 'critical' && 'Crítica'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowReportBugModal(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!executionToReport || !user || !bugTitle.trim()) return;
+                try {
+                  await createDefect({
+                    title: bugTitle.trim(),
+                    description: bugDescription.trim(),
+                    severity: bugSeverity,
+                    status: 'open',
+                    project_id: currentProject?.id || '',
+                    case_id: executionToReport.case_id,
+                    execution_id: executionToReport.id,
+                    user_id: user.id,
+                  });
+                  toast({
+                    title: 'Defeito criado',
+                    description: 'O defeito foi reportado com sucesso e vinculado ao caso de teste.'
+                  });
+                  setShowReportBugModal(false);
+                  setBugTitle('');
+                  setBugDescription('');
+                  setBugSeverity('medium');
+                  loadExecutions();
+                } catch (error: any) {
+                  toast({
+                    title: 'Erro ao criar defeito',
+                    description: error.message || 'Não foi possível reportar o defeito.',
+                    variant: 'destructive'
+                  });
+                }
+              }}
+              disabled={!bugTitle.trim() || !executionToReport}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reportar Defeito
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
