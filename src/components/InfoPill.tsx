@@ -5,6 +5,7 @@ export type InfoPillProps = {
   value: number | string;
   title?: string;
   variant?: 'default' | 'attention';
+  hasDefects?: boolean;
   className?: string;
   onClick?: () => void;
   disabled?: boolean;
@@ -15,7 +16,7 @@ export type InfoPillProps = {
  * Pequeno componente de pílula com ícone + valor, usado em cards/tabelas para contagens.
  * Mantém o estilo utilitário atual e permite realce quando houver atenção.
  */
-export const InfoPill: React.FC<InfoPillProps> = ({ icon: Icon, value, title, variant = 'default', className, onClick, disabled, ariaLabel }) => {
+export const InfoPill: React.FC<InfoPillProps> = ({ icon: Icon, value, title, variant = 'default', hasDefects = false, className, onClick, disabled, ariaLabel }) => {
   // Ultra-compacto: sem borda/fundo, apenas ícone+valor, altura mínima.
   const base = 'inline-flex items-center gap-1 h-5 px-0 rounded-sm text-[10px] font-medium justify-center whitespace-nowrap';
   const tone = variant === 'attention'
@@ -38,7 +39,7 @@ export const InfoPill: React.FC<InfoPillProps> = ({ icon: Icon, value, title, va
       }}
       className={[base, tone, interactivity, className].filter(Boolean).join(' ')} title={title}
     >
-      <Icon className={`h-5 w-5 ${Number(value) > 0 ? 'opacity-90' : 'opacity-50'}`} />
+      <Icon className={`h-5 w-5 ${hasDefects ? 'text-destructive opacity-100' : Number(value) > 0 ? 'opacity-90' : 'opacity-50'}`} />
       <span className="font-mono">{value}</span>
     </span>
   );

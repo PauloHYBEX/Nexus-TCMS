@@ -784,12 +784,13 @@ export const TestExecutions = () => {
                       </div>
 
                       {/* Report - InfoPill de bugs */}
-                      <div className="flex justify-center">
+                      <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
                         <InfoPill
                           icon={BugIcon}
                           value={defectsMap[execution.id]?.count || 0}
-                          title={defectsMap[execution.id]?.count ? `${defectsMap[execution.id]?.count} defeito(s) aberto(s)` : 'Nenhum defeito'}
+                          title={defectsMap[execution.id]?.count ? `${defectsMap[execution.id]?.count} defeito(s) aberto(s)` : 'Reportar defeito'}
                           variant={defectsMap[execution.id]?.count ? 'attention' : 'default'}
+                          hasDefects={!!(defectsMap[execution.id]?.count)}
                           onClick={() => {
                             setExecutionToReport(execution);
                             setShowReportBugModal(true);

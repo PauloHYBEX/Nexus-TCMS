@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2, Upload, ImageIcon, X } from 'lucide-react';
+import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2, Upload, ImageIcon, X, Bug } from 'lucide-react';
 import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types';
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
@@ -71,6 +71,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [branchImages, setBranchImages] = useState<{ name: string; dataUrl: string }[]>([]);
   const [branchFile, setBranchFile] = useState<File | null>(null);
   const [loadingBranch, setLoadingBranch] = useState(false);
+  const [defectCount, setDefectCount] = useState(0);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
@@ -82,8 +83,19 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       setLinkedCase(null);
       setBranchImages([]);
       setBranchFile(null);
+      setDefectCount(0);
     }
   }, [isOpen]);
+
+  // Buscar contagem de defeitos para execuções
+  useEffect(() => {
+    if (!isOpen || !item || type !== 'execution') return;
+    const caseId = (item as any).case_id as string | undefined;
+    if (!caseId) return;
+    supabase.from('defects').select('id', { count: 'exact', head: true })
+      .eq('case_id', caseId).neq('status', 'closed')
+      .then(({ count }) => setDefectCount(count || 0));
+  }, [isOpen, item, type]);
 
   const handleBranchFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -582,6 +594,12 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             <h2 className="text-xl font-bold text-foreground leading-snug flex-1 min-w-0">
               {getTypeLabel()} — {getItemTitle()}
             </h2>
+            {type === 'execution' && defectCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-destructive text-xs font-semibold mt-0.5 shrink-0" title={`${defectCount} defeito(s) aberto(s)`}>
+                <Bug className="h-4 w-4" />
+                {defectCount}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-2">
             {('status' in item && item.status) && (
