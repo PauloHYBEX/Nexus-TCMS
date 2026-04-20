@@ -22,6 +22,7 @@
     "lint:fix": "eslint . --ext .ts,.tsx --fix",
     "preview": "vite preview",
     "db:bootstrap": "node server/scripts/bootstrap-local-db.js",
+    "db:reset-password": "node server/scripts/reset-password.mjs",
     "test:e2e": "playwright test",
     "validate": "node scripts/validate-app.js"
   },
