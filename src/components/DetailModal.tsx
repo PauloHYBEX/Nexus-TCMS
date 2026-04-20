@@ -590,12 +590,12 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
         {/* ── Header ── */}
         <div className="mb-4">
-          <div className="flex items-start gap-2 flex-wrap">
-            <h2 className="text-xl font-bold text-foreground leading-snug flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-xl font-bold text-foreground leading-snug">
               {getTypeLabel()} — {getItemTitle()}
             </h2>
             {type === 'execution' && defectCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-destructive text-xs font-semibold mt-0.5 shrink-0" title={`${defectCount} defeito(s) aberto(s)`}>
+              <span className="inline-flex items-center gap-1 text-destructive text-xs font-semibold shrink-0" title={`${defectCount} defeito(s) aberto(s)`}>
                 <Bug className="h-4 w-4" />
                 {defectCount}
               </span>
