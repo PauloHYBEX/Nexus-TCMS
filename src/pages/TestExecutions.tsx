@@ -716,14 +716,14 @@ export const TestExecutions = () => {
           <div className="space-y-2">
             {sortedExecutions.length > 0 ? (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
-                {/* Header da tabela - ajustado para compacto com coluna Report */}
-                <div className="grid grid-cols-[70px_70px_2fr_100px_60px_90px_70px_72px] items-center gap-2 px-3 py-2 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {/* Header da tabela */}
+                <div className="grid grid-cols-[80px_80px_1fr_140px_80px_110px_80px_72px] items-center gap-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
                   <div>Status</div>
                   <div className="text-center">Executor</div>
-                  <div>Data</div>
+                  <div>Executado em</div>
                   <div className="text-center">Report</div>
                   <div className="flex justify-end">Ações</div>
                 </div>
@@ -732,26 +732,26 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[70px_70px_2fr_100px_60px_90px_70px_72px] items-center gap-2 px-3 py-2 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[80px_80px_1fr_140px_80px_110px_80px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
                       <div>
-                        <span className="text-xs font-mono bg-brand/10 text-brand px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-brand/10 text-brand px-2 py-0.5 rounded">
                           {exeLabel(execution)}
                         </span>
                       </div>
 
                       {/* ID Caso */}
                       <div>
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
                           {caseLabel(execution.case_id)}
                         </span>
                       </div>
 
-                      {/* Plano - truncado */}
-                      <div className="min-w-0">
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-1.5 py-0.5 rounded truncate block">
+                      {/* Plano */}
+                      <div className="min-w-0 flex items-center">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded inline-block max-w-full truncate">
                           {planLabel(execution.plan_id)}
                         </span>
                       </div>
@@ -761,12 +761,12 @@ export const TestExecutions = () => {
                         <StatusDot status={execution.status} label={executionStatusLabel(execution.status as any)} />
                       </div>
 
-                      {/* Avatar executor - menor */}
+                      {/* Avatar executor */}
                       <div className="flex justify-center">
-                        <UserAvatar userId={execution.user_id} name={execution.executed_by} size="sm" />
+                        <UserAvatar userId={execution.user_id} name={execution.executed_by} />
                       </div>
 
-                      {/* Data - mais compacta */}
+                      {/* Data */}
                       <div className="text-xs text-muted-foreground whitespace-nowrap">
                         {new Date(execution.executed_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </div>
