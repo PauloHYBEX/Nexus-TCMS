@@ -124,9 +124,14 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     // PPTX e outros: enviar para o servidor extrair
     if (isPptx) {
       try {
+        const token = localStorage.getItem('krg_local_auth_token');
         const form = new FormData();
         form.append('file', selectedFile);
-        const res = await fetch('/api/documents/extract', { method: 'POST', body: form, credentials: 'include' });
+        const res = await fetch('/api/documents/extract', {
+          method: 'POST',
+          body: form,
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair texto');
         const { text, images: extractedImages } = await res.json();
         setFormData(prev => ({ ...prev, requirements: text }));
