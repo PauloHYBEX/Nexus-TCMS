@@ -268,25 +268,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        {/* Detail Modal (visualização de requisito) */}
-      <DetailModal
-        isOpen={showDetailModal}
-        onClose={() => { setShowDetailModal(false); setSelectedReq(null); }}
-        item={selectedReq}
-        type="requirement"
-        onEdit={(item) => { if (item?.id) { openManage(item.id); setShowDetailModal(false); } }}
-        onDelete={async (id) => {
-          try {
-            await deleteRequirement(id);
-            setRequirements(prev => prev.filter(r => r.id !== id));
-            setShowDetailModal(false);
-            toast({ title: 'Excluído', description: 'Requisito excluído.' });
-          } catch (e: any) {
-            toast({ title: 'Erro', description: e?.message || 'Falha ao excluir requisito', variant: 'destructive' });
-          }
-        }}
-      />
-    </div>
+      </div>
     );
   }
 
@@ -351,40 +333,24 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                       </div>
                       <div className="text-sm text-muted-foreground mb-2 line-clamp-2">{req.description}</div>
                       <div className="mt-auto flex items-center justify-end gap-2">
-                        <span
-                          onClick={(e) => { e.stopPropagation(); if (hasPermission('can_manage_cases')) openManage(req.id); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
-                          className="inline-flex"
-                        >
-                          <InfoPill
-                            icon={LinkIcon}
-                            value={linkedCount}
-                            title={isProjectInactive ? 'Projeto não ativo — gerenciar desabilitado' : (hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão para gerenciar')}
-                            className="h-5 w-[40px] px-1.5 text-[11px]"
-                            ariaLabel="Gerenciar vínculos"
-                          />
-                        </span>
-                        <span
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const caseIds = linkedByReq[req.id] || [];
-                            if (dInfo.openCount > 0 && caseIds.length) {
-                              navigate(`/management?tab=defects&cases=${caseIds.join(',')}`);
-                            } else {
-                              toast({ title: 'Sem defeitos', description: 'Nenhum defeito aberto para este requisito. Abrindo a tela de Defeitos.', variant: 'default' });
-                              navigate('/management?tab=defects');
-                            }
-                          }}
-                          className="inline-flex"
-                        >
-                          <InfoPill
-                            icon={BugIcon}
-                            value={dInfo.openCount}
-                            title={dInfo.openCount > 0 ? `Ver defeitos • severidade: ${severityLabel(dInfo.maxSeverity!)}` : 'Nenhum defeito aberto'}
-                            variant={dInfo.openCount > 0 ? 'attention' : 'default'}
-                            className="h-5 w-[40px] px-1.5 text-[11px]"
-                            ariaLabel="Ver defeitos do requisito"
-                          />
-                        </span>
+                        <InfoPill
+                          icon={LinkIcon}
+                          value={linkedCount}
+                          title={isProjectInactive ? 'Projeto não ativo — gerenciar desabilitado' : (hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão para gerenciar')}
+                          className="h-5 w-[40px] px-1.5 text-[11px]"
+                          ariaLabel="Gerenciar vínculos"
+                          onClick={(e: any) => { e?.stopPropagation?.(); if (!isProjectInactive && hasPermission('can_manage_cases')) openManage(req.id); else if (isProjectInactive) toast({ title: 'Projeto não ativo', description: 'Gerenciamento desabilitado.', variant: 'destructive' }); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
+                        />
+                        <InfoPill
+                          icon={BugIcon}
+                          value={dInfo.openCount}
+                          title={dInfo.openCount > 0 ? `Ver defeitos • severidade: ${severityLabel(dInfo.maxSeverity!)}` : 'Ver defeitos'}
+                          variant={dInfo.openCount > 0 ? 'attention' : 'default'}
+                          hasDefects={dInfo.openCount > 0}
+                          className="h-5 w-[40px] px-1.5 text-[11px]"
+                          ariaLabel="Ver defeitos do requisito"
+                          onClick={(e: any) => { e?.stopPropagation?.(); const caseIds = linkedByReq[req.id] || []; if (caseIds.length) navigate(`/management?tab=defects&cases=${caseIds.join(',')}`); else navigate('/management?tab=defects'); }}
+                        />
                       </div>
                     </CardContent>
                   </Card>
@@ -417,40 +383,24 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                     <div className="flex items-center justify-center"><Badge className={priorityBadgeClass(req.priority)}>{priorityLabel(req.priority)}</Badge></div>
                     <div className="flex items-center justify-center"><Badge className={requirementStatusBadgeClass(req.status)}>{requirementStatusLabel(req.status)}</Badge></div>
                     <div className="grid grid-cols-[40px_40px] items-center justify-center justify-items-center gap-2">
-                      <span
-                        onClick={(e) => { e.stopPropagation(); if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Gerenciamento desabilitado.', variant: 'destructive' }); return; } if (hasPermission('can_manage_cases')) openManage(req.id); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
-                        className="inline-flex"
-                      >
-                        <InfoPill
-                          icon={LinkIcon}
-                          value={linkedCount}
-                          title={hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão para gerenciar'}
-                          className="h-5 w-[40px] px-1.5 text-[11px]"
-                          ariaLabel="Gerenciar vínculos"
-                        />
-                      </span>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const caseIds = linkedByReq[req.id] || [];
-                          if (dInfo.openCount > 0 && caseIds.length) {
-                            navigate(`/management?tab=defects&cases=${caseIds.join(',')}`);
-                          } else {
-                            toast({ title: 'Sem defeitos', description: 'Nenhum defeito aberto para este requisito. Abrindo a tela de Defeitos.', variant: 'default' });
-                            navigate('/management?tab=defects');
-                          }
-                        }}
-                        className="inline-flex"
-                      >
-                        <InfoPill
-                          icon={BugIcon}
-                          value={dInfo.openCount}
-                          title={dInfo.openCount > 0 ? `Ver defeitos • severidade: ${severityLabel(dInfo.maxSeverity!)}` : 'Nenhum defeito aberto'}
-                          variant={dInfo.openCount > 0 ? 'attention' : 'default'}
-                          className="h-5 w-[40px] px-1.5 text-[11px]"
-                          ariaLabel="Ver defeitos do requisito"
-                        />
-                      </span>
+                      <InfoPill
+                        icon={LinkIcon}
+                        value={linkedCount}
+                        title={isProjectInactive ? 'Projeto não ativo — gerenciar desabilitado' : (hasPermission('can_manage_cases') ? 'Gerenciar vínculos' : 'Sem permissão')}
+                        className="h-5 w-[40px] px-1.5 text-[11px]"
+                        ariaLabel="Gerenciar vínculos"
+                        onClick={(e: any) => { e?.stopPropagation?.(); if (isProjectInactive) { toast({ title: 'Projeto não ativo', description: 'Gerenciamento desabilitado.', variant: 'destructive' }); return; } if (hasPermission('can_manage_cases')) openManage(req.id); else toast({ title: 'Sem permissão', description: 'Você não pode gerenciar vínculos.', variant: 'destructive' }); }}
+                      />
+                      <InfoPill
+                        icon={BugIcon}
+                        value={dInfo.openCount}
+                        title={dInfo.openCount > 0 ? `Ver defeitos • severidade: ${severityLabel(dInfo.maxSeverity!)}` : 'Ver defeitos'}
+                        variant={dInfo.openCount > 0 ? 'attention' : 'default'}
+                        hasDefects={dInfo.openCount > 0}
+                        className="h-5 w-[40px] px-1.5 text-[11px]"
+                        ariaLabel="Ver defeitos do requisito"
+                        onClick={(e: any) => { e?.stopPropagation?.(); const caseIds = linkedByReq[req.id] || []; if (caseIds.length) navigate(`/management?tab=defects&cases=${caseIds.join(',')}`); else navigate('/management?tab=defects'); }}
+                      />
                     </div>
                   </div>
                 );
@@ -497,6 +447,30 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
           )}
         </>
       )}
+
+      {/* Detail Modal (visualização de requisito) */}
+      <DetailModal
+        isOpen={showDetailModal}
+        onClose={() => { setShowDetailModal(false); setSelectedReq(null); }}
+        item={selectedReq}
+        type="requirement"
+        onEdit={(item) => {
+          if (!item?.id) return;
+          setShowDetailModal(false);
+          // Navegar para aba de requisitos com id e modal=req:edit para abrir o formulário
+          navigate(`/management?tab=requirements&id=${item.id}&modal=req:edit`);
+        }}
+        onDelete={async (id) => {
+          try {
+            await deleteRequirement(id);
+            setRequirements(prev => prev.filter(r => r.id !== id));
+            setShowDetailModal(false);
+            toast({ title: 'Excluído', description: 'Requisito excluído.' });
+          } catch (e: any) {
+            toast({ title: 'Erro', description: e?.message || 'Falha ao excluir requisito', variant: 'destructive' });
+          }
+        }}
+      />
 
       <Dialog open={!!manageReqId} onOpenChange={(open) => !open && closeManage()}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">

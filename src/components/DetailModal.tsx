@@ -72,6 +72,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [branchFile, setBranchFile] = useState<File | null>(null);
   const [loadingBranch, setLoadingBranch] = useState(false);
   const [defectCount, setDefectCount] = useState(0);
+  const [linkedReqs, setLinkedReqs] = useState<Array<{ id: string; title: string; sequence?: number | null }>>([]);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
@@ -84,8 +85,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       setBranchImages([]);
       setBranchFile(null);
       setDefectCount(0);
+      setLinkedReqs([]);
     }
   }, [isOpen]);
+
+  // Buscar requisitos vinculados ao caso de teste
+  useEffect(() => {
+    if (!isOpen || !item || type !== 'case') return;
+    const caseId = (item as any).id;
+    if (!caseId) return;
+    supabase
+      .from('requirement_cases')
+      .select('requirement_id, requirements(id, title, sequence)')
+      .eq('case_id', caseId)
+      .then(({ data }) => {
+        if (!data) return;
+        const reqs = data
+          .map((row: any) => row.requirements)
+          .filter(Boolean)
+          .map((r: any) => ({ id: r.id, title: r.title, sequence: r.sequence ?? null }));
+        setLinkedReqs(reqs);
+      });
+  }, [isOpen, item, type]);
 
   // Buscar contagem de defeitos para execuções
   useEffect(() => {
@@ -838,7 +859,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           {/* Vínculos */}
           {(type === 'case' || type === 'execution') &&
             (('plan_id' in item && (item as any).plan_id) ||
-            (type === 'execution' && 'case_id' in item && (item as any).case_id)) && (
+            (type === 'execution' && 'case_id' in item && (item as any).case_id) ||
+            (type === 'case' && linkedReqs.length > 0)) && (
             <div>
               <h3 className="text-sm font-semibold text-foreground mb-2">Vínculos</h3>
               <div className="space-y-1.5">
@@ -851,6 +873,26 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                         ? (linkedPlan.sequence != null ? `PT-${String(linkedPlan.sequence).padStart(3, '0')} — ${linkedPlan.title || ''}` : linkedPlan.title || (item as any).plan_id)
                         : (item as any).plan_id}
                     </Link>
+                  </div>
+                )}
+                {type === 'case' && linkedReqs.length > 0 && (
+                  <div className="flex items-start gap-2 text-sm">
+                    <Link2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-medium text-foreground">Requisitos vinculados:</span>{' '}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {linkedReqs.map(r => (
+                          <Link
+                            key={r.id}
+                            to={`/management?tab=requirements&id=${r.id}&modal=req:view`}
+                            className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded font-mono hover:bg-brand/20 transition-colors"
+                            onClick={handleClose}
+                          >
+                            {r.sequence != null ? `REQ-${String(r.sequence).padStart(3, '0')}` : r.title}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
                 {type === 'execution' && 'case_id' in item && (item as any).case_id && (

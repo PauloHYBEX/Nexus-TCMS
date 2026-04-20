@@ -226,7 +226,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
     params.set('modal', 'defect:edit');
-    navigate({ pathname: BASE_PATH, search: params.toString() }, { replace: false });
+    navigate({ pathname: embedded ? location.pathname : BASE_PATH, search: params.toString() }, { replace: false });
     // carregar execuções do caso (se houver)
     if (d.case_id && user) {
       getTestExecutions(user.id, undefined, d.case_id).then(execList => setCaseExecutions(execList)).catch(() => setCaseExecutions([]));
@@ -371,12 +371,12 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm mb-1">Título</label>
-              <input className="w-full rounded-md border p-2 bg-background" value={title} onChange={e => setTitle(e.target.value)} />
+              <label htmlFor="defect-title" className="block text-sm mb-1">Título</label>
+              <input id="defect-title" name="defect-title" className="w-full rounded-md border p-2 bg-background" value={title} onChange={e => setTitle(e.target.value)} />
             </div>
             <div>
-              <label className="block text-sm mb-1">Descrição</label>
-              <textarea className="w-full rounded-md border p-2 bg-background" rows={4} value={description} onChange={e => setDescription(e.target.value)} />
+              <label htmlFor="defect-desc" className="block text-sm mb-1">Descrição</label>
+              <textarea id="defect-desc" name="defect-description" className="w-full rounded-md border p-2 bg-background" rows={4} value={description} onChange={e => setDescription(e.target.value)} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
