@@ -733,27 +733,27 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             if (!obj && !scope && !approach && !criteria && !resources) return null;
             return (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                   {obj && (
-                    <div>
+                    <div className="self-start">
                       <h3 className="text-sm font-semibold text-foreground mb-1.5">Objetivo</h3>
                       {renderListOrParagraph(obj)}
                     </div>
                   )}
                   {scope && (
-                    <div>
+                    <div className="self-start">
                       <h3 className="text-sm font-semibold text-foreground mb-1.5">Escopo</h3>
                       {renderListOrParagraph(scope)}
                     </div>
                   )}
                   {approach && (
-                    <div>
+                    <div className="self-start">
                       <h3 className="text-sm font-semibold text-foreground mb-1.5">Abordagem</h3>
                       {renderListOrParagraph(approach)}
                     </div>
                   )}
                   {criteria && (
-                    <div>
+                    <div className="self-start">
                       <h3 className="text-sm font-semibold text-foreground mb-1.5">Critérios</h3>
                       {renderListOrParagraph(criteria)}
                     </div>
