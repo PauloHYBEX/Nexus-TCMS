@@ -721,7 +721,7 @@ export const TestExecutions = () => {
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
-                  <div>Status</div>
+                  <div>Status / Notas</div>
                   <div className="text-center">Executor</div>
                   <div>Executado em</div>
                   <div className="text-center">Report</div>
@@ -732,7 +732,7 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[72px_72px_96px_1fr_64px_120px_72px_72px] items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[72px_72px_96px_1fr_64px_120px_72px_72px] items-start gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
@@ -756,9 +756,14 @@ export const TestExecutions = () => {
                         </span>
                       </div>
 
-                      {/* Status */}
-                      <div>
+                      {/* Status + prévia de notas */}
+                      <div className="min-w-0">
                         <StatusDot status={execution.status} label={executionStatusLabel(execution.status as any)} />
+                        {(execution.notes || execution.actual_result) && (
+                          <div className="text-xs text-muted-foreground truncate mt-0.5">
+                            {execution.notes || execution.actual_result}
+                          </div>
+                        )}
                       </div>
 
                       {/* Avatar executor */}

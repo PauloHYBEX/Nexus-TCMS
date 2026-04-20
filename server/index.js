@@ -317,10 +317,13 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
           }
           return filtered;
         });
-        const cols = Object.keys(rows[0]);
+        // Union de todas as colunas para garantir alinhamento em batch inserts
+        const colSet = new Set();
+        rows.forEach(row => Object.keys(row).forEach(k => colSet.add(k)));
+        const cols = Array.from(colSet);
         const params = [];
         const tuples = rows.map((row) => {
-          const placeholders = cols.map((col) => { params.push(row[col]); return '\$' + params.length; });
+          const placeholders = cols.map((col) => { params.push(row[col] !== undefined ? row[col] : null); return '\$' + params.length; });
           return '(' + placeholders.join(', ') + ')';
         });
         const conflictCols = String(options?.onConflict || '').split(',').map((s) => s.trim()).filter(Boolean);
