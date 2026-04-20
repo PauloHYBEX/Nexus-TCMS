@@ -73,6 +73,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [loadingBranch, setLoadingBranch] = useState(false);
   const [defectCount, setDefectCount] = useState(0);
   const [linkedReqs, setLinkedReqs] = useState<Array<{ id: string; title: string; sequence?: number | null }>>([]);
+  const [linkedCases, setLinkedCases] = useState<Array<{ id: string; title: string; sequence?: number | null }>>([]);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
@@ -86,8 +87,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       setBranchFile(null);
       setDefectCount(0);
       setLinkedReqs([]);
+      setLinkedCases([]);
     }
   }, [isOpen]);
+
+  // Buscar casos vinculados ao requisito
+  useEffect(() => {
+    if (!isOpen || !item || type !== 'requirement') return;
+    const reqId = (item as any).id;
+    if (!reqId) return;
+    supabase
+      .from('requirement_cases')
+      .select('case_id, test_cases(id, title, sequence)')
+      .eq('requirement_id', reqId)
+      .then(({ data }) => {
+        if (!data) return;
+        const cases = data
+          .map((row: any) => row.test_cases)
+          .filter(Boolean)
+          .map((c: any) => ({ id: c.id, title: c.title, sequence: c.sequence ?? null }));
+        setLinkedCases(cases);
+      });
+  }, [isOpen, item, type]);
 
   // Buscar requisitos vinculados ao caso de teste
   useEffect(() => {
@@ -806,8 +827,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             </div>
           )}
 
-          {/* Imagens de branches — apenas para casos (planos extraem automaticamente via IA) */}
-          {type === 'case' && (
+          {/* Imagens de branches — apenas quando geração IA está disponível */}
+          {type === 'case' && !!onGenerate && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -853,6 +874,25 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                   Importe um documento com imagens de referência para usá-las na geração de casos com IA.
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Vínculos para requisito — casos vinculados */}
+          {type === 'requirement' && linkedCases.length > 0 && (
+            <div>
+              <h3 className="text-sm font-semibold text-foreground mb-2">Casos Vinculados</h3>
+              <div className="flex flex-wrap gap-1.5">
+                {linkedCases.map(c => (
+                  <Link
+                    key={c.id}
+                    to={`/cases?id=${c.id}`}
+                    className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded font-mono hover:bg-brand/20 transition-colors"
+                    onClick={handleClose}
+                  >
+                    {c.sequence != null ? `CT-${String(c.sequence).padStart(3, '0')}` : c.title}
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
 
