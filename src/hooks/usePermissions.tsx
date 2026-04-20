@@ -15,7 +15,10 @@ export interface UserPermissions {
   can_manage_plans: boolean;
   can_manage_cases: boolean;
   can_manage_executions: boolean;
+  can_manage_requirements: boolean;
+  can_manage_defects: boolean;
   can_view_reports: boolean;
+  can_export: boolean;
   can_use_ai: boolean;
   can_access_model_control: boolean;
   can_access_admin_menu: boolean;
@@ -33,7 +36,10 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   can_manage_plans: false,
   can_manage_cases: false,
   can_manage_executions: false,
+  can_manage_requirements: false,
+  can_manage_defects: false,
   can_view_reports: false,
+  can_export: false,
   can_use_ai: false,
   can_access_model_control: false,
   can_access_admin_menu: false,
@@ -53,7 +59,10 @@ const getDefaultPermissions = (role: UserRole): UserPermissions => {
         can_manage_plans: true,
         can_manage_cases: true,
         can_manage_executions: true,
+        can_manage_requirements: true,
+        can_manage_defects: true,
         can_view_reports: true,
+        can_export: true,
         can_use_ai: true,
         can_access_model_control: true,
         can_access_admin_menu: true,
@@ -70,7 +79,10 @@ const getDefaultPermissions = (role: UserRole): UserPermissions => {
         can_manage_plans: true,
         can_manage_cases: true,
         can_manage_executions: true,
+        can_manage_requirements: true,
+        can_manage_defects: true,
         can_view_reports: true,
+        can_export: true,
         can_use_ai: true,
         can_access_model_control: true,
         can_access_admin_menu: false,
@@ -87,7 +99,10 @@ const getDefaultPermissions = (role: UserRole): UserPermissions => {
         can_manage_plans: true,
         can_manage_cases: true,
         can_manage_executions: true,
+        can_manage_requirements: true,
+        can_manage_defects: true,
         can_view_reports: true,
+        can_export: true,
         can_use_ai: true,
         can_access_model_control: false,
         can_access_admin_menu: false,
@@ -102,9 +117,12 @@ const getDefaultPermissions = (role: UserRole): UserPermissions => {
         can_manage_projects: false,
         can_delete_projects: false,
         can_manage_plans: false,
-        can_manage_cases: false,
+        can_manage_cases: true,
         can_manage_executions: true,
-        can_view_reports: false,
+        can_manage_requirements: false,
+        can_manage_defects: true,
+        can_view_reports: true,
+        can_export: false,
         can_use_ai: true,
         can_access_model_control: false,
         can_access_admin_menu: false,
@@ -121,7 +139,10 @@ const getDefaultPermissions = (role: UserRole): UserPermissions => {
         can_manage_plans: false,
         can_manage_cases: false,
         can_manage_executions: false,
-        can_view_reports: false,
+        can_manage_requirements: false,
+        can_manage_defects: false,
+        can_view_reports: true,
+        can_export: false,
         can_use_ai: false,
         can_access_model_control: false,
         can_access_admin_menu: false,
