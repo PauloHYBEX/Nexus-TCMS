@@ -11,6 +11,8 @@ import { randomUUID } from 'crypto';
 import { getClient, db, query } from './db.js';
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
 
 dotenv.config();
 
@@ -514,11 +516,29 @@ app.post('/api/documents/extract', requireUser, upload.single('file'), async (re
     let result = { text: '', images: [] };
     if (ext === '.pptx') {
       result = await extractFromPptx(filePath);
-    } else if (ext === '.txt' || req.file.mimetype === 'text/plain') {
+    } else if (ext === '.txt' || ext === '.md' || req.file.mimetype === 'text/plain') {
       result.text = await fs.readFile(filePath, 'utf-8');
+    } else if (ext === '.pdf') {
+      const buffer = await fs.readFile(filePath);
+      const parsed = await pdfParse(buffer);
+      result.text = parsed.text || '';
+    } else if (ext === '.docx') {
+      const buffer = await fs.readFile(filePath);
+      const { value } = await mammoth.extractRawText({ buffer });
+      result.text = value || '';
+    } else if (ext === '.doc') {
+      const buffer = await fs.readFile(filePath);
+      try {
+        const { value } = await mammoth.extractRawText({ buffer });
+        result.text = value || '';
+      } catch {
+        result.text = '(Arquivo .doc legado — conteúdo não pôde ser extraído automaticamente. Por favor, salve como .docx ou cole o conteúdo manualmente.)';
+      }
+    } else if (ext === '.xlsx' || ext === '.xls') {
+      result.text = '(Arquivo Excel detectado — cole o conteúdo das células relevantes no campo de Requisitos abaixo para melhor análise.)';
     } else {
       await fs.unlink(filePath).catch(() => {});
-      return res.status(400).json({ error: { message: 'Formato não suportado. Use .pptx ou .txt' } });
+      return res.status(400).json({ error: { message: `Formato '${ext}' não suportado. Use .pptx, .pdf, .docx, .doc ou .txt` } });
     }
     await fs.unlink(filePath).catch(() => {});
     res.json({

@@ -103,15 +103,28 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
     ? undefined
     : availableModels.find(m => m.id === formData.selectedModel);
 
+  const extractDocumentViaServer = async (selectedFile: File) => {
+    const token = localStorage.getItem('krg_local_auth_token');
+    const form = new FormData();
+    form.append('file', selectedFile);
+    const res = await fetch('/api/documents/extract', {
+      method: 'POST',
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair documento');
+    return res.json() as Promise<{ text: string; images: { name: string; dataUrl: string }[]; filename: string; format: string }>;
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
     setFile(selectedFile);
-    setImages([]); // Reset imagens anteriores
-    const isPptx = selectedFile.name.toLowerCase().endsWith('.pptx');
-    const isText = selectedFile.type === 'text/plain';
-    // Arquivos de texto puro: ler diretamente
-    if (isText) {
+    setImages([]);
+    const ext = selectedFile.name.toLowerCase().split('.').pop() || '';
+    const isPlainText = selectedFile.type === 'text/plain' || ext === 'txt' || ext === 'md';
+    // Arquivos de texto puro: ler diretamente no browser
+    if (isPlainText) {
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = (event.target?.result as string) || '';
@@ -121,40 +134,22 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
       reader.readAsText(selectedFile);
       return;
     }
-    // PPTX e outros: enviar para o servidor extrair
-    if (isPptx) {
-      try {
-        const token = localStorage.getItem('krg_local_auth_token');
-        const form = new FormData();
-        form.append('file', selectedFile);
-        const res = await fetch('/api/documents/extract', {
-          method: 'POST',
-          body: form,
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+    // Todos os demais formatos (PPTX, PDF, DOCX, DOC, etc.): enviar para o servidor
+    try {
+      const { text, images: extractedImages, format } = await extractDocumentViaServer(selectedFile);
+      setFormData(prev => ({ ...prev, requirements: text }));
+      if (extractedImages?.length > 0) {
+        setImages(extractedImages);
+        toast({
+          title: 'Documento analisado',
+          description: `${extractedImages.length} imagem(s) e texto extraídos de ${selectedFile.name}.`
         });
-        if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair texto');
-        const { text, images: extractedImages } = await res.json();
-        setFormData(prev => ({ ...prev, requirements: text }));
-        if (extractedImages && extractedImages.length > 0) {
-          setImages(extractedImages);
-          toast({
-            title: 'PowerPoint analisado',
-            description: `${extractedImages.length} imagem(s) e texto extraídos. A IA analisará o conteúdo visual também.`
-          });
-        } else {
-          toast({ title: 'PowerPoint carregado', description: `${selectedFile.name} analisado. Texto extraído automaticamente.` });
-        }
-      } catch (err: any) {
-        toast({ title: 'Erro ao processar', description: err?.message || 'Falha ao extrair conteúdo.', variant: 'destructive' });
+      } else {
+        toast({ title: 'Documento carregado', description: `${selectedFile.name} (${format?.toUpperCase()}) analisado com sucesso.` });
       }
-      return;
+    } catch (err: any) {
+      toast({ title: 'Erro ao processar', description: err?.message || 'Falha ao extrair conteúdo.', variant: 'destructive' });
     }
-    // Outros formatos: avisar usuário
-    toast({
-      title: 'Aviso',
-      description: 'Para arquivos que não são texto puro ou PowerPoint, cole o conteúdo relevante nos campos abaixo (ex.: Requisitos Específicos).',
-      variant: 'default'
-    });
   };
 
   const loadCases = async (planId: string) => {

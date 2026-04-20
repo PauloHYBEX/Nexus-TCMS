@@ -377,24 +377,40 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
     ? undefined 
     : availableModels.find(m => m.id === selectedModel);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const extractDocumentViaServer = async (selectedFile: File) => {
+    const token = localStorage.getItem('krg_local_auth_token');
+    const form = new FormData();
+    form.append('file', selectedFile);
+    const res = await fetch('/api/documents/extract', {
+      method: 'POST',
+      body: form,
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair documento');
+    return res.json() as Promise<{ text: string; images: { name: string; dataUrl: string }[]; filename: string; format: string }>;
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      
-      if (selectedFile.type === 'text/plain') {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setDocumentContent(event.target?.result as string);
-        };
-        reader.readAsText(selectedFile);
-      } else {
-        toast({
-          title: "Aviso",
-          description: "Para arquivos que não são texto puro, cole o conteúdo manualmente no campo abaixo.",
-          variant: "default"
-        });
-      }
+    if (!selectedFile) return;
+    setFile(selectedFile);
+    const ext = selectedFile.name.toLowerCase().split('.').pop() || '';
+    const isPlainText = selectedFile.type === 'text/plain' || ext === 'txt' || ext === 'md';
+    if (isPlainText) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setDocumentContent(event.target?.result as string || '');
+        toast({ title: 'Documento carregado', description: `${selectedFile.name} carregado com sucesso.` });
+      };
+      reader.readAsText(selectedFile);
+      return;
+    }
+    try {
+      const { text, format } = await extractDocumentViaServer(selectedFile);
+      setDocumentContent(text);
+      toast({ title: 'Documento carregado', description: `${selectedFile.name} (${format?.toUpperCase()}) extraído com sucesso.` });
+    } catch (err: any) {
+      toast({ title: 'Erro ao processar', description: err?.message || 'Falha ao extrair conteúdo.', variant: 'destructive' });
     }
   };
 
@@ -688,7 +704,7 @@ export const AIBatchGeneratorForm = ({ onSuccess, type = 'plan', mode = 'standar
         <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors" title="Aceita .txt, .md, .doc, .docx, .pdf, .xlsx, .xls">
           <Upload className="h-3.5 w-3.5" />
           {file ? <span className="max-w-[140px] truncate">{file.name}</span> : 'Importar documento'}
-          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls" onChange={handleFileChange} />
+          <input type="file" className="sr-only" accept=".txt,.md,.doc,.docx,.pdf,.xlsx,.xls,.pptx" onChange={handleFileChange} />
         </label>
       </div>
 

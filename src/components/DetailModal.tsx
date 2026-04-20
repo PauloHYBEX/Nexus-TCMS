@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2 } from 'lucide-react';
+import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2, Upload, ImageIcon, X } from 'lucide-react';
 import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types';
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
@@ -68,6 +68,9 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [authorTags, setAuthorTags] = useState<Array<{ label: string; icon?: string }>>([]);
   const [linkedPlan, setLinkedPlan] = useState<{ id: string; sequence?: number | null; title?: string } | null>(null);
   const [linkedCase, setLinkedCase] = useState<{ id: string; sequence?: number | null; title?: string } | null>(null);
+  const [branchImages, setBranchImages] = useState<{ name: string; dataUrl: string }[]>([]);
+  const [branchFile, setBranchFile] = useState<File | null>(null);
+  const [loadingBranch, setLoadingBranch] = useState(false);
   const { currentProject } = useProject();
   const isProjectInactive = !!currentProject && currentProject.status !== 'active';
 
@@ -77,8 +80,37 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       setConfirmDelete(false);
       setLinkedPlan(null);
       setLinkedCase(null);
+      setBranchImages([]);
+      setBranchFile(null);
     }
   }, [isOpen]);
+
+  const handleBranchFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setBranchFile(f);
+    setBranchImages([]);
+    setLoadingBranch(true);
+    const ext = f.name.toLowerCase().split('.').pop() || '';
+    const isPlainText = f.type === 'text/plain' || ext === 'txt' || ext === 'md';
+    if (isPlainText) { setLoadingBranch(false); return; }
+    try {
+      const token = localStorage.getItem('krg_local_auth_token');
+      const form = new FormData();
+      form.append('file', f);
+      const res = await fetch('/api/documents/extract', {
+        method: 'POST', body: form,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error((await res.json()).error?.message || 'Erro ao extrair');
+      const { images: extracted } = await res.json();
+      setBranchImages(extracted || []);
+    } catch (err: any) {
+      toast({ title: 'Erro ao extrair branches', description: err?.message, variant: 'destructive' });
+    } finally {
+      setLoadingBranch(false);
+    }
+  };
 
   // Fetch linked plan/case for vínculos section
   useEffect(() => {
@@ -421,10 +453,11 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       if (plan.scope?.trim()) parts.push(`Escopo:\n${plan.scope}`);
       if (plan.criteria?.trim()) parts.push(`Critérios:\n${plan.criteria}`);
       if (opts?.additionalContext?.trim()) parts.push(`Contexto adicional (usuário):\n${opts.additionalContext.trim()}`);
+      if (branchImages.length > 0) parts.push(`Branches da sprint detectadas: ${branchImages.length} imagem(ns) anexadas (ver dados visuais).`);
       const documentContent = parts.join('\n\n');
 
       const prompt = `
-      Analise o seguinte documento e identifique AUTONOMAMENTE diferentes funcionalidades, cenários ou fluxos que necessitam de casos de teste específicos.
+      Analise o seguinte documento${branchImages.length > 0 ? ' e as imagens de branches da sprint anexadas' : ''} e identifique AUTONOMAMENTE diferentes funcionalidades, cenários ou fluxos que necessitam de casos de teste específicos.
 
       DOCUMENTO:
       ${documentContent}
@@ -472,7 +505,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
       const generatedData = await ModelControlService.executeTask(
         'general-completion',
-        { prompt },
+        { prompt, images: branchImages.length > 0 ? branchImages.map(i => i.dataUrl) : undefined },
         effectiveModelId || undefined
       );
 
@@ -701,6 +734,56 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Executado por</h3>
                   <p className="text-sm text-muted-foreground">{item.executed_by}</p>
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Branches — upload de documento com imagens de branches */}
+          {(type === 'plan' || type === 'case') && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  Branches do Documento
+                </h3>
+                <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors">
+                  {loadingBranch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                  {branchFile ? <span className="max-w-[140px] truncate">{branchFile.name}</span> : 'Importar Sprint/Documento'}
+                  <input type="file" className="sr-only" accept=".pptx,.pdf,.docx,.doc" onChange={handleBranchFileChange} disabled={loadingBranch} />
+                </label>
+              </div>
+              {branchImages.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md border border-border/40 max-h-56 overflow-y-auto">
+                    {branchImages.map((img, idx) => (
+                      <div key={idx} className="relative group flex-shrink-0">
+                        <img
+                          src={img.dataUrl}
+                          alt={`Branch ${idx + 1} — ${img.name}`}
+                          className="h-20 w-28 object-cover rounded border border-border/60 cursor-pointer hover:opacity-90 transition-opacity"
+                          title={img.name}
+                          onClick={() => window.open(img.dataUrl, '_blank')}
+                        />
+                        <span className="absolute top-1 left-1 h-4 w-4 bg-brand text-white text-[10px] rounded-full flex items-center justify-center font-mono">
+                          {idx + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-muted-foreground">
+                      {branchImages.length} imagem(ns) extraída(s) — clique para ampliar. Estas branches serão usadas pela IA na geração de casos.
+                    </p>
+                    <button type="button" onClick={() => { setBranchImages([]); setBranchFile(null); }}
+                      className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-0.5 transition-colors">
+                      <X className="h-3 w-3" /> Limpar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground italic">
+                  Importe um arquivo PPTX, PDF ou DOCX com as branches da sprint para vinculá-las a este {type === 'plan' ? 'plano' : 'caso'} e usá-las na geração de casos com IA.
+                </p>
               )}
             </div>
           )}
