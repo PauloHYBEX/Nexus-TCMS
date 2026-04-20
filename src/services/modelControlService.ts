@@ -230,7 +230,7 @@ const defaultConfig: AIModelConfig = {
         - scope: Escopo detalhado do plano em português
         - approach: Abordagem/metodologia de teste em português
         - criteria: Critérios de entrada e saída em português
-        - resources: Recursos necessários em português
+        - resources: OBRIGATÓRIO — Analise o documento/requisitos fornecidos e identifique TODAS as branches, funcionalidades, módulos ou entregas da sprint mencionados. Liste-os separados por vírgula no formato: "branch: <nome1>, <nome2>, <nome3>, ...". Se não houver branches explícitas, liste as funcionalidades principais como itens. Exemplo: "branch: feature/login, feature/checkout, fix/payment-bug". NÃO deixe este campo vazio.
         - schedule: Cronograma e marcos em português
         - risks: Riscos potenciais e mitigações em português
         
@@ -238,6 +238,7 @@ const defaultConfig: AIModelConfig = {
         - Retorne APENAS um objeto JSON, sem comentários ou markdown.
         - O objeto DEVE conter exatamente as chaves acima.
         - TODO o conteúdo deve estar em PORTUGUÊS do Brasil.
+        - O campo "resources" é CRÍTICO: deve sempre listar as branches ou funcionalidades identificadas no documento.
       `,
       description: 'Template padrão para gerar planos de teste detalhados',
       parameters: ['appDescription', 'requirements', 'additionalContext'],

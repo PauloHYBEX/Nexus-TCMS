@@ -659,34 +659,63 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             const scope = (item as any).scope?.toString().trim();
             const approach = (item as any).approach?.toString().trim();
             const criteria = (item as any).criteria?.toString().trim();
-            if (!obj && !scope && !approach && !criteria) return null;
+            const resources = (item as any).resources?.toString().trim();
+
+            // Parsear branches do campo resources
+            const parseBranches = (res: string): string[] => {
+              if (!res) return [];
+              const match = res.match(/branch[es]*\s*:\s*(.+)/i);
+              const raw = match ? match[1] : res;
+              return raw.split(/,|\n/).map(b => b.replace(/^[\s\-\*\u00ba]+/, '').trim()).filter(Boolean);
+            };
+            const branches = parseBranches(resources || '');
+
+            if (!obj && !scope && !approach && !criteria && !resources) return null;
             return (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {obj && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Objetivo</h3>
-                    {renderListOrParagraph(obj)}
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  {obj && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Objetivo</h3>
+                      {renderListOrParagraph(obj)}
+                    </div>
+                  )}
+                  {scope && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Escopo</h3>
+                      {renderListOrParagraph(scope)}
+                    </div>
+                  )}
+                  {approach && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Abordagem</h3>
+                      {renderListOrParagraph(approach)}
+                    </div>
+                  )}
+                  {criteria && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Critérios</h3>
+                      {renderListOrParagraph(criteria)}
+                    </div>
+                  )}
+                </div>
+                {branches.length > 0 && (
+                  <div className="rounded-lg border border-brand/30 bg-brand/5 p-3.5">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2.5">
+                      <span className="h-2 w-2 rounded-full bg-brand inline-block" />
+                      Branches Utilizadas
+                      <span className="ml-auto text-xs font-normal text-muted-foreground">{branches.length} branch{branches.length !== 1 ? 'es' : ''}</span>
+                    </h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {branches.map((b, i) => (
+                        <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 px-2 py-0.5 text-xs font-mono text-brand">
+                          <span className="opacity-60">#</span>{b}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
-                {scope && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Escopo</h3>
-                    {renderListOrParagraph(scope)}
-                  </div>
-                )}
-                {approach && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Abordagem</h3>
-                    {renderListOrParagraph(approach)}
-                  </div>
-                )}
-                {criteria && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-1.5">Critérios</h3>
-                    {renderListOrParagraph(criteria)}
-                  </div>
-                )}
-              </div>
+              </>
             );
           })()}
 
@@ -738,28 +767,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             </div>
           )}
 
-          {/* Branches — upload de documento com imagens de branches */}
-          {(type === 'plan' || type === 'case') && (
+          {/* Imagens de branches — apenas para casos (planos extraem automaticamente via IA) */}
+          {type === 'case' && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
                   <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                  Branches do Documento
+                  Imagens de Referência
                 </h3>
                 <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground hover:text-foreground border border-border/60 rounded-md px-2.5 py-1.5 transition-colors">
                   {loadingBranch ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-                  {branchFile ? <span className="max-w-[140px] truncate">{branchFile.name}</span> : 'Importar Sprint/Documento'}
+                  {branchFile ? <span className="max-w-[140px] truncate">{branchFile.name}</span> : 'Importar documento'}
                   <input type="file" className="sr-only" accept=".pptx,.pdf,.docx,.doc" onChange={handleBranchFileChange} disabled={loadingBranch} />
                 </label>
               </div>
               {branchImages.length > 0 ? (
                 <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md border border-border/40 max-h-56 overflow-y-auto">
+                  <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md border border-border/40 max-h-48 overflow-y-auto">
                     {branchImages.map((img, idx) => (
-                      <div key={idx} className="relative group flex-shrink-0">
+                      <div key={idx} className="relative flex-shrink-0">
                         <img
                           src={img.dataUrl}
-                          alt={`Branch ${idx + 1} — ${img.name}`}
+                          alt={`Ref ${idx + 1}`}
                           className="h-20 w-28 object-cover rounded border border-border/60 cursor-pointer hover:opacity-90 transition-opacity"
                           title={img.name}
                           onClick={() => window.open(img.dataUrl, '_blank')}
@@ -772,7 +801,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                   </div>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-muted-foreground">
-                      {branchImages.length} imagem(ns) extraída(s) — clique para ampliar. Estas branches serão usadas pela IA na geração de casos.
+                      {branchImages.length} imagem(ns) — clique para ampliar. Serão enviadas para a IA na geração de casos.
                     </p>
                     <button type="button" onClick={() => { setBranchImages([]); setBranchFile(null); }}
                       className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-0.5 transition-colors">
@@ -782,7 +811,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground italic">
-                  Importe um arquivo PPTX, PDF ou DOCX com as branches da sprint para vinculá-las a este {type === 'plan' ? 'plano' : 'caso'} e usá-las na geração de casos com IA.
+                  Importe um documento com imagens de referência para usá-las na geração de casos com IA.
                 </p>
               )}
             </div>
