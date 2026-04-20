@@ -717,7 +717,7 @@ export const TestExecutions = () => {
             {sortedExecutions.length > 0 ? (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Header da tabela */}
-                <div className="grid grid-cols-[68px_52px_60px_100px_1fr_36px_auto_44px_60px] items-center gap-x-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="grid grid-cols-[68px_56px_64px_110px_1fr_36px_auto_44px_64px] items-center gap-x-6 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
@@ -733,7 +733,7 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[68px_52px_60px_100px_1fr_36px_auto_44px_60px] items-center gap-x-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[68px_56px_64px_110px_1fr_36px_auto_44px_64px] items-center gap-x-6 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
@@ -745,14 +745,14 @@ export const TestExecutions = () => {
 
                       {/* ID Caso */}
                       <div>
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded whitespace-nowrap">
                           {caseLabel(execution.case_id)}
                         </span>
                       </div>
 
                       {/* Plano */}
                       <div className="min-w-0 flex items-center">
-                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded inline-block max-w-full truncate">
+                        <span className="text-xs font-mono bg-muted text-muted-foreground px-2 py-0.5 rounded whitespace-nowrap inline-block max-w-full truncate">
                           {planLabel(execution.plan_id)}
                         </span>
                       </div>
