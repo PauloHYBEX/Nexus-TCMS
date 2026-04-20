@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { Sparkles, Loader2, Zap, FileText, FlaskConical, Play, Upload, AlertCircle } from 'lucide-react';
-import { getTestPlans, getTestCases, createTestPlan, createTestCase, createTestExecution } from '@/services/supabaseService';
+import { getTestPlans, getTestCases, createTestPlan, createTestCase, createTestExecution, createRequirement } from '@/services/supabaseService';
 import { TestPlan, TestCase, AIModelTask, AIModel } from '@/types';
 import * as ModelControlService from '@/services/modelControlService';
 import { cn } from '@/lib/utils';
@@ -234,6 +234,30 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
             generated_by_ai: true
           });
           results.push({ ...newPlan, type: 'plan' });
+
+          // Auto-gerar requisitos a partir do escopo/objetivo do plano
+          try {
+            const scopeText: string = payload.scope || payload.objective || payload.description || '';
+            const reqLines: string[] = scopeText
+              .split(/\n|;|(?<=\.)\s/)  
+              .map((s: string) => s.replace(/^[-*•\d.]+\s*/, '').trim())
+              .filter((s: string) => s.length > 15 && s.length < 300);
+            const deduped = [...new Set(reqLines)].slice(0, 8);
+            if (deduped.length > 0) {
+              await Promise.all(deduped.map((line: string) =>
+                createRequirement({
+                  user_id: user.id,
+                  project_id: currentProject.id,
+                  title: line.length > 120 ? line.slice(0, 117) + '...' : line,
+                  description: `Gerado automaticamente a partir do plano: ${newPlan.title}`,
+                  priority: 'medium',
+                  status: 'open',
+                } as any)
+              ));
+            }
+          } catch (_e) {
+            // falha silenciosa — não bloqueia criação do plano
+          }
         } else if (formData.type === 'case') {
           // Alguns templates podem retornar um array ou um objeto com `cases`
           const source: any = Array.isArray(payload)

@@ -715,9 +715,9 @@ export const TestExecutions = () => {
           // Lista em formato tabela (alinhada a Planos/Casos)
           <div className="space-y-2">
             {sortedExecutions.length > 0 ? (
-              <div className="bg-card border border-border rounded-lg overflow-x-auto">
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Header da tabela */}
-                <div className="grid grid-cols-[72px_72px_96px_120px_minmax(160px,1fr)_64px_120px_72px_72px] items-center gap-x-6 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider min-w-[860px]">
+                <div className="grid grid-cols-[60px_60px_80px_110px_1fr_48px_100px_52px_64px] items-center gap-x-3 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
@@ -733,7 +733,7 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[72px_72px_96px_120px_minmax(160px,1fr)_64px_120px_72px_72px] items-center gap-x-6 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer min-w-[860px]"
+                      className="grid grid-cols-[60px_60px_80px_110px_1fr_48px_100px_52px_64px] items-center gap-x-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
