@@ -17,7 +17,7 @@ export type InfoPillProps = {
  */
 export const InfoPill: React.FC<InfoPillProps> = ({ icon: Icon, value, title, variant = 'default', className, onClick, disabled, ariaLabel }) => {
   // Ultra-compacto: sem borda/fundo, apenas ícone+valor, altura mínima.
-  const base = 'inline-flex items-center gap-0.5 h-3 px-0 rounded-sm text-[10px] font-medium justify-center whitespace-nowrap';
+  const base = 'inline-flex items-center gap-1 h-5 px-0 rounded-sm text-[10px] font-medium justify-center whitespace-nowrap';
   const tone = variant === 'attention'
     ? 'text-foreground/90'
     : 'text-foreground/80';
@@ -38,7 +38,7 @@ export const InfoPill: React.FC<InfoPillProps> = ({ icon: Icon, value, title, va
       }}
       className={[base, tone, interactivity, className].filter(Boolean).join(' ')} title={title}
     >
-      <Icon className={`h-3 w-3 ${Number(value) > 0 ? 'opacity-90' : 'opacity-50'}`} />
+      <Icon className={`h-5 w-5 ${Number(value) > 0 ? 'opacity-90' : 'opacity-50'}`} />
       <span className="font-mono">{value}</span>
     </span>
   );
