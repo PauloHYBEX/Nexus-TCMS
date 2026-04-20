@@ -8,11 +8,13 @@ import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+import { createRequire } from 'module';
 import { getClient, db, query } from './db.js';
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
-import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 
 dotenv.config();
 
@@ -210,6 +212,7 @@ function filterToTableCols(table, obj) {
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }
   }
+  _tableColsCache.clear(); // invalida cache após migrações
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
