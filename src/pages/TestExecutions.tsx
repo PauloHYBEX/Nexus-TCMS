@@ -717,7 +717,7 @@ export const TestExecutions = () => {
             {sortedExecutions.length > 0 ? (
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 {/* Header da tabela */}
-                <div className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-8 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-24 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
@@ -733,7 +733,7 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-8 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-24 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
