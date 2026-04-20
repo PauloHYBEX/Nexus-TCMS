@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2, Upload, ImageIcon, X, Bug } from 'lucide-react';
+import { Edit, Trash2, Calendar, User, Sparkles, Loader2, Code, LifeBuoy, Briefcase, Shield, Eye, ClipboardList, Link2, Upload, ImageIcon, X, Bug as BugIcon } from 'lucide-react';
 import { TestPlan, TestCase, TestExecution, Requirement, Defect } from '@/types';
 import { ExportDropdown } from './ExportDropdown';
 import { toast } from '@/components/ui/use-toast';
@@ -596,7 +596,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             </h2>
             {type === 'execution' && defectCount > 0 && (
               <span className="inline-flex items-center gap-1 text-destructive text-xs font-semibold shrink-0" title={`${defectCount} defeito(s) aberto(s)`}>
-                <Bug className="h-4 w-4" />
+                <BugIcon className="h-4 w-4" />
                 {defectCount}
               </span>
             )}

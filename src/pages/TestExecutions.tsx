@@ -715,9 +715,9 @@ export const TestExecutions = () => {
           // Lista em formato tabela (alinhada a Planos/Casos)
           <div className="space-y-2">
             {sortedExecutions.length > 0 ? (
-              <div className="bg-card border border-border rounded-lg overflow-hidden">
+              <div className="bg-card border border-border rounded-lg overflow-x-auto">
                 {/* Header da tabela */}
-                <div className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-24 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="grid grid-cols-[72px_72px_96px_120px_minmax(160px,1fr)_64px_120px_72px_72px] items-center gap-x-6 px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider min-w-[860px]">
                   <div>ID</div>
                   <div>Caso</div>
                   <div>Plano</div>
@@ -733,7 +733,7 @@ export const TestExecutions = () => {
                   {paginatedExecutions.map((execution) => (
                     <div
                       key={execution.id}
-                      className="grid grid-cols-[72px_72px_96px_120px_1fr_64px_120px_72px_72px] items-center gap-x-24 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                      className="grid grid-cols-[72px_72px_96px_120px_minmax(160px,1fr)_64px_120px_72px_72px] items-center gap-x-6 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer min-w-[860px]"
                       onClick={() => handleViewDetails(execution)}
                     >
                       {/* ID Execução */}
@@ -821,9 +821,7 @@ export const TestExecutions = () => {
                 </div>
               </div>
             ) : (
-              <div className="text-center py-12">
-                <p className="text-muted-foreground">Nenhum resultado encontrado com os filtros atuais.</p>
-              </div>
+              <div className="text-sm text-muted-foreground px-2 py-4">Nenhum resultado encontrado com os filtros atuais.</div>
             )}
           </div>
         )}
