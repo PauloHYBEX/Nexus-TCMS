@@ -84,6 +84,7 @@ export interface Defect {
   id: string;
   user_id: string;
   project_id?: string; // incluído para compatibilidade com createDefect e filtros por projeto
+  plan_id?: string | null;
   title: string;
   description: string;
   status: 'open' | 'in_analysis' | 'fixed' | 'validated' | 'closed';

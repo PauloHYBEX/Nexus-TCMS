@@ -1007,6 +1007,7 @@ export const TestExecutions = () => {
                     severity: bugSeverity,
                     status: 'open',
                     project_id: currentProject?.id || '',
+                    plan_id: executionToReport.plan_id,
                     case_id: executionToReport.case_id,
                     execution_id: executionToReport.id,
                     user_id: user.id,

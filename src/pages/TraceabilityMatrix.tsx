@@ -228,13 +228,17 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
     [manageReqId, requirements]
   );
 
+  const reqLabel = (req: Requirement) =>
+    req.sequence != null ? `REQ-${String(req.sequence).padStart(3, '0')}` : `REQ-${(req.id || '').slice(0, 4)}`;
+
   const filteredRequirements = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return requirements;
     return requirements.filter(r =>
       (r.title || '').toLowerCase().includes(q) ||
       (r.description || '').toLowerCase().includes(q) ||
-      (r.id || '').toLowerCase().includes(q)
+      (r.id || '').toLowerCase().includes(q) ||
+      (r.sequence != null ? `req-${String(r.sequence).padStart(3, '0')}` : '').includes(q)
     );
   }, [requirements, searchTerm]);
 
@@ -333,7 +337,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                     <CardHeader className="p-4 pb-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">{`REQ-${(req.id || '').slice(0,4)}`}</span>
+                          <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded flex-shrink-0">{reqLabel(req)}</span>
                           <CardTitle className="text-base line-clamp-2 leading-tight min-w-0">{req.title}</CardTitle>
                         </div>
                       </div>
@@ -408,7 +412,7 @@ export const TraceabilityMatrix = ({ embedded = false, preferredViewMode, onPref
                     className="grid grid-cols-[80px_1fr_120px_120px_100px] items-center gap-4 px-4 py-3 hover:bg-muted/30 transition-colors min-h-[56px] cursor-pointer"
                     onClick={() => { setSelectedReq(req); setShowDetailModal(true); }}
                   >
-                    <div className="flex items-center"><span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">{`REQ-${(req.id || '').slice(0,4)}`}</span></div>
+                    <div className="flex items-center"><span className="text-xs font-mono bg-brand/10 text-brand px-2 py-1 rounded">{reqLabel(req)}</span></div>
                     <div className="text-sm font-medium leading-tight text-center flex items-center justify-center min-w-0"><span className="truncate">{req.title}</span></div>
                     <div className="flex items-center justify-center"><Badge className={priorityBadgeClass(req.priority)}>{priorityLabel(req.priority)}</Badge></div>
                     <div className="flex items-center justify-center"><Badge className={requirementStatusBadgeClass(req.status)}>{requirementStatusLabel(req.status)}</Badge></div>
