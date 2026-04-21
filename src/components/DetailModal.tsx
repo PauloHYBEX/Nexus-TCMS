@@ -582,15 +582,19 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         throw new Error(`Formato de resposta inválido: esperado array "cases". Amostra recebida: ${snippet}...`);
       }
 
+      console.log('[AI Cases] branches do plano:', branchLines);
+      console.log('[AI Cases] casos recebidos da IA:', (casesRaw as any[]).map((c: any) => ({ title: c?.title, branch: c?.branch || c?.branches })));
+
       const casesToInsert = (casesRaw as any[]).map((c: any, idx: number) => {
         const stepsArray = Array.isArray(c?.steps) ? c.steps : (
           typeof c?.steps === 'string'
             ? c.steps.split(/\r?\n/).filter(Boolean).map((line: string) => ({ action: line.trim(), expected_result: '' }))
             : []
         );
-        // Tenta associar a branch correspondente: primeiro pela propriedade branch/branches
-        // retornada pela IA, senao pelo indice na lista de branches do plano
-        const caseBranch = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || branchLines[idx] || '';
+        // Associa branch: 1) campo retornado pela IA 2) round-robin na lista de branches do plano
+        const iaBranch = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || '';
+        const fallbackBranch = branchLines.length > 0 ? branchLines[idx % branchLines.length] : '';
+        const caseBranch = iaBranch || fallbackBranch;
         return {
           plan_id: plan.id,
           title: sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`),
@@ -613,11 +617,18 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         };
       });
 
+      console.log('[AI Cases] payload enviado ao DB (branches por caso):', casesToInsert.map((c: any) => ({ title: c.title, branches: c.branches })));
+
       const { data: insertedCases, error } = await supabase
         .from('test_cases')
         .insert(casesToInsert)
         .select();
       if (error) throw error;
+
+      console.log('[AI Cases] casos persistidos (verificar se coluna branches existe no DB):', (insertedCases || []).map((c: any) => ({ id: c.id, title: c.title, branches: c.branches })));
+      if (insertedCases && insertedCases.length > 0 && !('branches' in insertedCases[0])) {
+        toast({ title: 'Aviso', description: 'Coluna "branches" não existe em test_cases — reinicie o servidor (npm run dev:all) para aplicar a migration.', variant: 'destructive' });
+      }
 
       // Auto-criar requisito + vínculo para cada caso gerado
       let reqCount = 0;
