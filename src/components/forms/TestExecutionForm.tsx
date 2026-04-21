@@ -1,7 +1,5 @@
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +10,7 @@ import { toast } from '@/components/ui/use-toast';
 import { TestExecution, TestCase, TestPlan } from '@/types';
 import SearchableCombobox from '@/components/SearchableCombobox';
 import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
+import { StandardButton } from '@/components/StandardButton';
 
 interface TestExecutionFormProps {
   onSuccess?: (execution: TestExecution) => void;
@@ -207,155 +206,134 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
   };
 
   return (
-    <Card className="w-full max-w-4xl mx-auto border-brand/20 shadow-2xl">
-      <CardHeader className="bg-gradient-to-r from-brand/5 to-brand/10 border-b border-brand/20">
-        <CardTitle className="text-brand text-xl font-semibold">
-          {isEdit ? 'Editar Execução #' + (execution?.id ? execution.id.slice(0, 8) : 'N/A') : 'Registrar Execução de Teste'}
-        </CardTitle>
-        {isEdit && (
-          <p className="text-sm text-muted-foreground mt-1">
-            Atualize os campos da execução selecionada.
-          </p>
-        )}
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isEdit && !planId && (
-            <div>
-              <Label htmlFor="project_id">Projeto</Label>
-              <ProjectSelectField
-                value={selectedProjectId || ''}
-                onValueChange={(value) => {
-                  setSelectedProjectId(value || null);
-                  // reset plano e caso ao mudar projeto
-                  setFormData(prev => ({ ...prev, plan_id: '', case_id: '' }));
-                  setCases([]);
-                  setSelectedCase(null);
-                }}
-                placeholder="Selecione um projeto"
-              />
-            </div>
-          )}
-          {!planId && !isEdit && (
-            <div>
-              <Label htmlFor="plan_id">Plano de Teste *</Label>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Projeto */}
+      {!isEdit && !planId && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Projeto</Label>
+          <ProjectSelectField
+            value={selectedProjectId || ''}
+            onValueChange={(value) => {
+              setSelectedProjectId(value || null);
+              setFormData(prev => ({ ...prev, plan_id: '', case_id: '' }));
+              setCases([]);
+              setSelectedCase(null);
+            }}
+            placeholder="Selecione um projeto"
+          />
+        </div>
+      )}
+
+      {/* Plano + Caso */}
+      {!isEdit && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {!planId && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plano de Teste *</Label>
               <SearchableCombobox
-                items={plans.map((p) => ({ value: p.id, label: p.title, hint: (p as any).description?.slice(0, 80) }))}
+                items={plans.map((p) => ({ value: p.id, label: p.title }))}
                 value={formData.plan_id}
                 onChange={(value) => handleChange('plan_id', value)}
                 placeholder="Selecione um plano"
-                disabled={loading || !selectedProjectId}
+                disabled={!selectedProjectId}
               />
             </div>
           )}
-
-          {!caseId && !isEdit && (
-            <div>
-              <Label htmlFor="case_id">Caso de Teste *</Label>
+          {!caseId && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Caso de Teste *</Label>
               <SearchableCombobox
-                items={cases.map((c) => ({ value: c.id, label: c.title, hint: c.description?.slice(0, 80) }))}
+                items={cases.map((c) => ({ value: c.id, label: `${c.sequence ? `#${c.sequence} ` : ''}${c.title}` }))}
                 value={formData.case_id}
                 onChange={(value) => handleChange('case_id', value)}
-                placeholder="Selecione um caso de teste"
+                placeholder="Selecione um caso"
                 disabled={!formData.plan_id && !planId}
               />
             </div>
           )}
+        </div>
+      )}
 
-          {selectedCase && (
-            <Card className="bg-brand/5 border-brand/20">
-              <CardHeader>
-                <CardTitle className="text-lg text-brand">{selectedCase.title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  {selectedCase.description}
-                </p>
-                {selectedCase.steps.length > 0 && (
-                  <div>
-                    <h4 className="font-medium mb-2">Passos:</h4>
-                    <ol className="list-decimal list-inside space-y-1">
-                      {selectedCase.steps.map((step) => (
-                        <li key={step.id} className="text-sm">
-                          <strong>Ação:</strong> {step.action}
-                          <br />
-                          <strong>Esperado:</strong> {step.expected_result}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+      {/* Preview do caso selecionado */}
+      {selectedCase && (
+        <div className="rounded-lg bg-muted/20 border border-border/40 p-3 space-y-1.5">
+          <p className="text-xs font-medium text-brand">{selectedCase.title}</p>
+          {selectedCase.description && (
+            <p className="text-xs text-muted-foreground line-clamp-2">{selectedCase.description}</p>
           )}
+          {selectedCase.steps.length > 0 && (
+            <ol className="text-xs text-muted-foreground space-y-0.5 pl-3 list-decimal">
+              {selectedCase.steps.slice(0, 3).map(s => (
+                <li key={s.id}>{s.action}</li>
+              ))}
+              {selectedCase.steps.length > 3 && <li className="text-brand/60">+{selectedCase.steps.length - 3} passos...</li>}
+            </ol>
+          )}
+        </div>
+      )}
 
-          <div>
-            <Label htmlFor="status">Status *</Label>
-            <Select value={formData.status} onValueChange={(value) => handleChange('status', value)} required>
-              <SelectTrigger className="focus:border-brand/50 focus:ring-brand/20">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="passed">Aprovado</SelectItem>
-                <SelectItem value="failed">Reprovado</SelectItem>
-                <SelectItem value="blocked">Bloqueado</SelectItem>
-                <SelectItem value="not_tested">Não Testado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Status */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status *</Label>
+        <Select value={formData.status} onValueChange={(value) => handleChange('status', value)} required>
+          <SelectTrigger className="h-9 bg-muted/30 border-border/60 focus:ring-0">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="passed">✅ Aprovado</SelectItem>
+            <SelectItem value="failed">❌ Reprovado</SelectItem>
+            <SelectItem value="blocked">🚫 Bloqueado</SelectItem>
+            <SelectItem value="not_tested">⬜ Não Testado</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-          <div>
-            <Label htmlFor="actual_result">Resultado Obtido</Label>
-            <Textarea
-              id="actual_result"
-              value={formData.actual_result}
-              onChange={(e) => handleChange('actual_result', e.target.value)}
-              rows={4}
-              placeholder="Descreva o resultado obtido durante a execução"
-              className="focus:border-brand/50 focus:ring-brand/20"
-            />
-          </div>
+      {/* Executado por */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Executado por</Label>
+        <input
+          value={formData.executed_by}
+          onChange={(e) => handleChange('executed_by', e.target.value)}
+          className="w-full h-9 rounded-md bg-muted/30 border border-border/60 px-3 text-sm focus:outline-none focus:border-brand/50"
+          required
+        />
+      </div>
 
-          <div>
-            <Label htmlFor="notes">Observações</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => handleChange('notes', e.target.value)}
-              rows={3}
-              placeholder="Adicione observações sobre a execução"
-              className="focus:border-brand/50 focus:ring-brand/20"
-            />
-          </div>
+      {/* Resultado obtido */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resultado Obtido</Label>
+        <Textarea
+          value={formData.actual_result}
+          onChange={(e) => handleChange('actual_result', e.target.value)}
+          placeholder="Descreva o que ocorreu durante a execução..."
+          rows={3}
+          className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none"
+        />
+      </div>
 
-          <div>
-            <Label htmlFor="executed_by">Executado por *</Label>
-            <Textarea
-              id="executed_by"
-              value={formData.executed_by}
-              onChange={(e) => handleChange('executed_by', e.target.value)}
-              rows={1}
-              required
-              className="focus:border-brand/50 focus:ring-brand/20"
-            />
-          </div>
+      {/* Observações */}
+      <div className="space-y-1.5">
+        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Observações</Label>
+        <Textarea
+          value={formData.notes}
+          onChange={(e) => handleChange('notes', e.target.value)}
+          placeholder="Informações adicionais..."
+          rows={2}
+          className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none"
+        />
+      </div>
 
-          <div className="flex gap-2 justify-end">
-            {onCancel && (
-              <Button type="button" variant="outline" onClick={() => { try { localStorage.removeItem(storageKey); } catch (e) { /* noop */ } onCancel?.(); }}>
-                Cancelar
-              </Button>
-            )}
-            <Button
-              type="submit"
-              disabled={loading || !formData.case_id || !formData.plan_id}
-              variant="brand"
-            >
-              {loading ? (isEdit ? 'Salvando...' : 'Registrando...') : (isEdit ? 'Salvar Alterações' : 'Registrar Execução')}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      {/* Footer */}
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+        {onCancel && (
+          <StandardButton type="button" variant="outline" onClick={() => { try { localStorage.removeItem(storageKey); } catch {} onCancel?.(); }}>
+            Cancelar
+          </StandardButton>
+        )}
+        <StandardButton type="submit" disabled={loading || !formData.case_id || !formData.plan_id} variant="brand">
+          {loading ? (isEdit ? 'Salvando...' : 'Registrando...') : (isEdit ? 'Salvar Execução' : 'Registrar Execução')}
+        </StandardButton>
+      </div>
+    </form>
   );
 };

@@ -1047,6 +1047,17 @@ export const getCasesByRequirement = async (userId: string, requirementId: strin
   }));
 };
 
+// Criar vínculo entre requisito e caso de teste
+export const linkCaseToRequirement = async (userId: string, requirementId: string, caseId: string): Promise<void> => {
+  const { error } = await supabase
+    .from('requirements_cases')
+    .upsert([{ requirement_id: requirementId, case_id: caseId }], { onConflict: 'requirement_id,case_id' });
+  if (error) {
+    console.error('Erro ao vincular caso a requisito:', error);
+    throw error;
+  }
+};
+
 // =====================
 // Fase 1: Defeitos
 // =====================

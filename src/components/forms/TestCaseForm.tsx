@@ -1,19 +1,18 @@
 
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProject } from '@/contexts/ProjectContext';
-import { createTestCase, getTestPlans, getTestPlansByProject, updateTestCase } from '@/services/supabaseService';
+import { createTestCase, getTestPlansByProject, updateTestCase, getRequirementsByProject, linkCaseToRequirement } from '@/services/supabaseService';
 import { toast } from '@/components/ui/use-toast';
-import { TestCase, TestPlan, TestStep } from '@/types';
-import { Plus, Trash2 } from 'lucide-react';
+import { TestCase, TestPlan, TestStep, Requirement } from '@/types';
+import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
 import SearchableCombobox from '@/components/SearchableCombobox';
 import { ProjectSelectField } from '@/components/forms/ProjectSelectField';
+import { StandardButton } from '@/components/StandardButton';
 
 interface TestCaseFormProps {
   onSuccess?: (testCase: TestCase) => void;
@@ -27,6 +26,9 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
   const { currentProject } = useProject();
   const [loading, setLoading] = useState(false);
   const [plans, setPlans] = useState<TestPlan[]>([]);
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [requirementId, setRequirementId] = useState<string>('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   // Projeto selecionado localmente no modal (padrão: projeto atual)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(currentProject?.id || null);
   const [formData, setFormData] = useState({
@@ -49,9 +51,8 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
   };
 
   useEffect(() => {
-    if (user && !planId) {
-      loadPlans();
-    }
+    if (user && !planId) loadPlans();
+    if (user) loadRequirements();
   }, [user, planId, selectedProjectId]);
 
   // Prefill when editing
@@ -153,13 +154,23 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
 
   const loadPlans = async () => {
     try {
-      // Carrega somente planos do projeto selecionado localmente. Sem projeto, lista vazia.
-      const data = selectedProjectId 
+      const data = selectedProjectId
         ? await getTestPlansByProject(user!.id, selectedProjectId)
         : [];
       setPlans(data);
     } catch (error) {
       console.error('Erro ao carregar planos:', error);
+    }
+  };
+
+  const loadRequirements = async () => {
+    try {
+      const data = selectedProjectId
+        ? await getRequirementsByProject(user!.id, selectedProjectId)
+        : [];
+      setRequirements(data);
+    } catch (error) {
+      console.error('Erro ao carregar requisitos:', error);
     }
   };
 
@@ -190,12 +201,16 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
         ? await updateTestCase(initialData.id, payload)
         : await createTestCase(payload);
 
+      // Vincular ao requisito selecionado (apenas na criação ou se mudou)
+      if (requirementId && !initialData) {
+        try { await linkCaseToRequirement(user.id, requirementId, testCase.id); } catch {}
+      }
+
       toast({
         title: "Sucesso",
         description: initialData ? "Caso de teste atualizado com sucesso!" : "Caso de teste criado com sucesso!"
       });
 
-      // Clear draft on success
       try { localStorage.removeItem(getDraftKey()); } catch (e) { /* noop */ }
 
       onSuccess?.(testCase);
@@ -241,183 +256,194 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
   };
 
   return (
-    <Card className="w-full max-w-4xl mx-auto border-brand/20 shadow-2xl">
-      <CardHeader className="bg-gradient-to-r from-brand/5 to-brand/10 border-b border-brand/20">
-        <CardTitle className="text-brand text-xl font-semibold">
-          {initialData ? 'Editar Caso de Teste #' + (initialData.id ? initialData.id.slice(0, 8) : 'N/A') : 'Criar Novo Caso de Teste'}
-        </CardTitle>
-        {initialData && (
-          <p className="text-sm text-muted-foreground mt-1">
-            Atualize os campos do caso de teste selecionado.
-          </p>
-        )}
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Seleção de Projeto local no modal */}
-          {!initialData && !planId && (
-            <div>
-              <Label htmlFor="project_id">Projeto</Label>
-              <ProjectSelectField
-                value={selectedProjectId || ''}
-                onValueChange={(value) => {
-                  setSelectedProjectId(value || null);
-                  // Ao trocar de projeto, resetar plano selecionado
-                  setFormData(prev => ({ ...prev, plan_id: '' }));
-                }}
-                placeholder="Selecione um projeto"
-              />
-            </div>
-          )}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="title">Título *</Label>
-              <Input
-                id="title"
-                value={formData.title}
-                onChange={(e) => handleChange('title', e.target.value)}
-                required
-                className="focus:border-brand/50 focus:ring-brand/20"
-              />
-            </div>
-            {!planId && (
-              <div>
-                <Label htmlFor="plan_id">Plano de Teste *</Label>
-                <SearchableCombobox
-                  items={plans.map((p) => ({ value: p.id, label: p.title, hint: (p as any).description?.slice(0, 80) }))}
-                  value={formData.plan_id}
-                  onChange={(value) => handleChange('plan_id', value)}
-                  placeholder="Selecione um plano"
-                  disabled={loading || !selectedProjectId}
-                />
-              </div>
-            )}
-          </div>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Projeto (só quando não vem de planId) */}
+      {!initialData && !planId && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Projeto</Label>
+          <ProjectSelectField
+            value={selectedProjectId || ''}
+            onValueChange={(value) => {
+              setSelectedProjectId(value || null);
+              setFormData(prev => ({ ...prev, plan_id: '' }));
+            }}
+            placeholder="Selecione um projeto"
+          />
+        </div>
+      )}
 
-          <div>
-            <Label htmlFor="description">Descrição</Label>
-            <Textarea
-              id="description"
-              value={formData.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              rows={3}
-              className="focus:border-brand/50 focus:ring-brand/20"
+      {/* Título + Plano */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="tc-title" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Título *</Label>
+          <Input
+            id="tc-title"
+            value={formData.title}
+            onChange={(e) => handleChange('title', e.target.value)}
+            placeholder="Título do caso de teste"
+            required
+            className="h-9 bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0"
+          />
+        </div>
+        {!planId && (
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Plano de Teste *</Label>
+            <SearchableCombobox
+              items={plans.map((p) => ({ value: p.id, label: p.title }))}
+              value={formData.plan_id}
+              onChange={(value) => handleChange('plan_id', value)}
+              placeholder="Selecione um plano"
+              disabled={!selectedProjectId}
             />
           </div>
+        )}
+      </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="priority">Prioridade</Label>
-              <Select value={formData.priority} onValueChange={(value) => handleChange('priority', value)}>
-                <SelectTrigger className="focus:border-brand/50 focus:ring-brand/20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Baixa</SelectItem>
-                  <SelectItem value="medium">Média</SelectItem>
-                  <SelectItem value="high">Alta</SelectItem>
-                  <SelectItem value="critical">Crítica</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="type">Tipo</Label>
-              <Select value={formData.type} onValueChange={(value) => handleChange('type', value)}>
-                <SelectTrigger className="focus:border-brand/50 focus:ring-brand/20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="functional">Funcional</SelectItem>
-                  <SelectItem value="integration">Integração</SelectItem>
-                  <SelectItem value="performance">Performance</SelectItem>
-                  <SelectItem value="security">Segurança</SelectItem>
-                  <SelectItem value="usability">Usabilidade</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+      {/* Prioridade + Tipo */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Prioridade</Label>
+          <Select value={formData.priority} onValueChange={(value) => handleChange('priority', value)}>
+            <SelectTrigger className="h-9 bg-muted/30 border-border/60 focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Baixa</SelectItem>
+              <SelectItem value="medium">Média</SelectItem>
+              <SelectItem value="high">Alta</SelectItem>
+              <SelectItem value="critical">Crítica</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tipo</Label>
+          <Select value={formData.type} onValueChange={(value) => handleChange('type', value)}>
+            <SelectTrigger className="h-9 bg-muted/30 border-border/60 focus:ring-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="functional">Funcional</SelectItem>
+              <SelectItem value="integration">Integração</SelectItem>
+              <SelectItem value="performance">Performance</SelectItem>
+              <SelectItem value="security">Segurança</SelectItem>
+              <SelectItem value="usability">Usabilidade</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
-          <div>
-            <Label htmlFor="preconditions">Pré-condições</Label>
+      {/* Requisito (vínculo opcional) */}
+      {!initialData && (
+        <div className="space-y-1.5">
+          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Requisito vinculado <span className="normal-case font-normal">(opcional)</span></Label>
+          <SearchableCombobox
+            items={requirements.map(r => ({ value: r.id, label: `${r.sequence ? `REQ-${String(r.sequence).padStart(3,'0')} — ` : ''}${r.title}` }))}
+            value={requirementId}
+            onChange={(value) => setRequirementId(value || '')}
+            placeholder="Vincular a um requisito existente"
+            disabled={!selectedProjectId}
+          />
+        </div>
+      )}
+
+      {/* Descrição */}
+      <div className="space-y-1.5">
+        <Label htmlFor="tc-desc" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Descrição</Label>
+        <Textarea
+          id="tc-desc"
+          value={formData.description}
+          onChange={(e) => handleChange('description', e.target.value)}
+          placeholder="Contexto e objetivo do caso..."
+          rows={2}
+          className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none"
+        />
+      </div>
+
+      {/* Campos avançados */}
+      <button
+        type="button"
+        onClick={() => setShowAdvanced(v => !v)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {showAdvanced ? 'Ocultar campos avançados' : 'Campos avançados (pré-condições, passos, resultado esperado)'}
+      </button>
+
+      {showAdvanced && (
+        <div className="space-y-4 pt-1 border-t border-border/40">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pré-condições</Label>
             <Textarea
-              id="preconditions"
               value={formData.preconditions}
               onChange={(e) => handleChange('preconditions', e.target.value)}
               rows={2}
-              className="focus:border-brand/50 focus:ring-brand/20"
+              className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none"
             />
           </div>
 
-          <div>
-            <Label>Passos do Teste</Label>
-            <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Passos do Teste</Label>
+            <div className="space-y-2">
               {steps.map((step, index) => (
-                <div key={step.id} className="border border-brand/20 rounded-lg p-4 bg-brand/5">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label>Passo {index + 1}</Label>
-                    {steps.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => removeStep(step.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid gap-2">
-                    <div>
-                      <Label>Ação</Label>
+                <div key={step.id} className="flex gap-2 items-start p-3 rounded-lg bg-muted/20 border border-border/40">
+                  <GripVertical className="h-4 w-4 text-muted-foreground mt-2 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-mono text-brand bg-brand/10 px-1.5 py-0.5 rounded shrink-0">{index + 1}</span>
                       <Textarea
                         value={step.action}
                         onChange={(e) => updateStep(step.id, 'action', e.target.value)}
-                        rows={2}
-                        className="focus:border-brand/50 focus:ring-brand/20"
+                        placeholder="Ação a executar"
+                        rows={1}
+                        className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none text-sm"
                       />
                     </div>
-                    <div>
-                      <Label>Resultado Esperado</Label>
-                      <Textarea
-                        value={step.expected_result}
-                        onChange={(e) => updateStep(step.id, 'expected_result', e.target.value)}
-                        rows={2}
-                        className="focus:border-brand/50 focus:ring-brand/20"
-                      />
-                    </div>
+                    <Textarea
+                      value={step.expected_result}
+                      onChange={(e) => updateStep(step.id, 'expected_result', e.target.value)}
+                      placeholder="Resultado esperado"
+                      rows={1}
+                      className="bg-muted/40 border-border/40 focus:border-brand/50 focus:ring-0 resize-none text-xs text-muted-foreground"
+                    />
                   </div>
+                  {steps.length > 1 && (
+                    <button type="button" onClick={() => removeStep(step.id)} className="text-muted-foreground hover:text-destructive transition-colors mt-1">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
-              <Button type="button" variant="outline" onClick={addStep} className="border-brand/30 text-brand hover:bg-brand/10">
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar Passo
-              </Button>
+              <button
+                type="button"
+                onClick={addStep}
+                className="flex items-center gap-1.5 text-xs text-brand hover:text-brand/80 transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" /> Adicionar passo
+              </button>
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="expected_result">Resultado Esperado Final</Label>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Resultado Esperado Final</Label>
             <Textarea
-              id="expected_result"
               value={formData.expected_result}
               onChange={(e) => handleChange('expected_result', e.target.value)}
-              rows={3}
-              className="focus:border-brand/50 focus:ring-brand/20"
+              rows={2}
+              className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none"
             />
           </div>
+        </div>
+      )}
 
-          <div className="flex gap-2 justify-end">
-            {onCancel && (
-              <Button type="button" variant="outline" onClick={handleCancel}>
-                Cancelar
-              </Button>
-            )}
-            <Button type="submit" disabled={loading || !formData.plan_id} className="bg-brand hover:bg-brand/90 text-white">
-              {loading ? (initialData ? 'Salvando...' : 'Criando...') : (initialData ? 'Salvar Alterações' : 'Criar Caso')}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+      {/* Footer */}
+      <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
+        {onCancel && (
+          <StandardButton type="button" variant="outline" onClick={handleCancel}>Cancelar</StandardButton>
+        )}
+        <StandardButton type="submit" disabled={loading || !formData.plan_id} variant="brand">
+          {loading ? (initialData ? 'Salvando...' : 'Criando...') : (initialData ? 'Salvar Caso' : 'Criar Caso')}
+        </StandardButton>
+      </div>
+    </form>
   );
 };

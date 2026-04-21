@@ -364,80 +364,64 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
 
       {/* Dialog único para criar/editar */}
       <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) closeForm(); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar Defeito' : 'Novo Defeito'}</DialogTitle>
-            <DialogDescription>Preencha os campos obrigatórios.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="defect-title" className="block text-sm mb-1">Título</label>
-              <input id="defect-title" name="defect-title" className="w-full rounded-md border p-2 bg-background" value={title} onChange={e => setTitle(e.target.value)} />
+          <div className="space-y-4 pt-1">
+            <div className="space-y-1.5">
+              <label htmlFor="defect-title" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Título *</label>
+              <input id="defect-title" name="defect-title" className="w-full h-9 rounded-md border border-border/60 bg-muted/30 px-3 text-sm focus:outline-none focus:border-brand/50" placeholder="Título do defeito" value={title} onChange={e => setTitle(e.target.value)} />
             </div>
-            <div>
-              <label htmlFor="defect-desc" className="block text-sm mb-1">Descrição</label>
-              <textarea id="defect-desc" name="defect-description" className="w-full rounded-md border p-2 bg-background" rows={4} value={description} onChange={e => setDescription(e.target.value)} />
+            <div className="space-y-1.5">
+              <label htmlFor="defect-desc" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
+              <textarea id="defect-desc" name="defect-description" className="w-full rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:border-brand/50 resize-none" rows={3} placeholder="Descreva o defeito encontrado..." value={description} onChange={e => setDescription(e.target.value)} />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-1">Severidade</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Severidade</label>
                 <SearchableCombobox
-                  items={[
-                    { value: 'low', label: 'Baixa' },
-                    { value: 'medium', label: 'Média' },
-                    { value: 'high', label: 'Alta' },
-                    { value: 'critical', label: 'Crítica' },
-                  ]}
+                  items={[{ value: 'low', label: 'Baixa' },{ value: 'medium', label: 'Média' },{ value: 'high', label: 'Alta' },{ value: 'critical', label: 'Crítica' }]}
                   value={severity}
                   onChange={(value) => { if (value) setSeverity(value as Defect['severity']); }}
-                  placeholder="Selecione a severidade"
+                  placeholder="Selecione"
                 />
               </div>
-              <div>
-                <label className="block text-sm mb-1">Status</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</label>
                 <SearchableCombobox
-                  items={[
-                    { value: 'open', label: 'Aberto' },
-                    { value: 'in_analysis', label: 'Em análise' },
-                    { value: 'fixed', label: 'Corrigido' },
-                    { value: 'validated', label: 'Validado' },
-                    { value: 'closed', label: 'Fechado' },
-                  ]}
+                  items={[{ value: 'open', label: 'Aberto' },{ value: 'in_analysis', label: 'Em análise' },{ value: 'fixed', label: 'Corrigido' },{ value: 'validated', label: 'Validado' },{ value: 'closed', label: 'Fechado' }]}
                   value={status}
                   onChange={(value) => { if (value) setStatus(value as Defect['status']); }}
-                  placeholder="Selecione o status"
+                  placeholder="Selecione"
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm mb-1">Caso relacionado (opcional)</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Caso relacionado <span className="normal-case font-normal">(opcional)</span></label>
                 <SearchableCombobox
                   items={projectCases.map(c => ({ value: c.id, label: `${c.sequence ? `#${c.sequence} ` : ''}${c.title}` }))}
                   value={caseId}
                   onChange={(value) => { setCaseId(value || ''); }}
-                  placeholder="Selecione um caso (opcional)"
+                  placeholder="Selecione um caso"
                 />
               </div>
-              <div>
-                <label className="block text-sm mb-1">Execução (opcional)</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Execução <span className="normal-case font-normal">(opcional)</span></label>
                 <SearchableCombobox
                   items={caseExecutions.map(e => ({ value: e.id, label: `${new Date(e.executed_at).toLocaleString()} • ${e.status}` }))}
                   value={executionId}
                   onChange={(value) => { setExecutionId(value || ''); }}
-                  placeholder={caseId ? 'Selecione uma execução (opcional)' : 'Selecione um caso primeiro'}
+                  placeholder={caseId ? 'Selecione' : 'Selecione um caso primeiro'}
                   disabled={!caseId}
                 />
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
               <StandardButton variant="outline" onClick={closeForm}>Cancelar</StandardButton>
-              <StandardButton 
-                onClick={submit}
-                disabled={!hasPermission('can_manage_executions')}
-                className={!editing ? 'bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-600 hover:to-emerald-600 text-white border-0' : ''}
-              >
-                {editing ? 'Salvar' : 'Criar'}
+              <StandardButton variant="brand" onClick={submit} disabled={!hasPermission('can_manage_executions')}>
+                {editing ? 'Salvar' : 'Criar Defeito'}
               </StandardButton>
             </div>
           </div>
