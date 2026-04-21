@@ -231,17 +231,17 @@ const defaultConfig: AIModelConfig = {
           "scope": "<Escopo detalhado: liste cada funcionalidade/entrega como item de lista usando o caractere *>",
           "approach": "<Abordagem/metodologia: liste cada tipo de teste como item de lista usando o caractere *>",
           "criteria": "<Critérios de entrada e saída: liste cada critério como item de lista usando o caractere *>",
-          "resources": "<OBRIGATÓRIO — Recursos humanos e ferramentas necessários. Exemplo: Equipe: QA, Dev. Ferramentas: Selenium, Postman.>",
+          "resources": "<Recursos humanos e ferramentas: descreva a equipe e ferramentas necessárias em texto corrido ou lista com *. NÃO coloque nomes de branches aqui.>",
           "schedule": "<Cronograma e marcos principais da sprint em português>",
           "risks": "<Riscos potenciais e suas mitigações: liste cada risco como item de lista usando o caractere *>",
-          "branches": "<CRÍTICO — Extraia do documento todas as branches de entrega mencionadas, separando obrigatoriamente por tipo. Use o formato EXATO abaixo:\nFront-end:\n* <branch1>\n* <branch2>\nBack-end:\n* <branch1>\n* <branch2>\nSe não houver separação Front/Back explícita, liste todas sob um único grupo 'Geral:'. NUNCA deixe este campo vazio — se não encontrar branches explícitas, liste as funcionalidades principais como se fossem branches.>"
+          "branches": "<CAMPO CRÍTICO — Liste APENAS os nomes das branches de código-fonte encontrados no documento (ex: sprint_16_06_login, feature/checkout, hotfix/fix-bug). Use o formato EXATO:\nFront-end:\n* sprint_xx_nome_branch\n* hotfix/nome-fix\nBack-end:\n* sprint_xx_nome_branch\nSe Front/Back não estiver indicado no documento, use um único grupo 'Geral:'. REGRAS ABSOLUTAS: (1) Use APENAS nomes de branches reais (snake_case, kebab-case, ou com /). (2) NÃO coloque frases, descrições ou markdown. (3) NUNCA deixe vazio — se não achar branches, liste as funcionalidades no padrão feature/nome-funcionalidade.>"
         }
         
         REGRAS CRÍTICAS:
         - Retorne APENAS o objeto JSON, sem comentários, sem markdown, sem bloco de código.
-        - TODAS as chaves são obrigatórias — nunca omita nenhuma, mesmo que o conteúdo seja genérico.
-        - O campo "branches" é o mais importante: leia o documento inteiro em busca de nomes de branches (padrões: sprint_XX_YY, feature/xxx, hotfix/xxx, fix/xxx, bugfix/xxx) e liste-os no formato solicitado.
-        - TODO o conteúdo textual deve estar em PORTUGUÊS do Brasil.
+        - TODAS as chaves são obrigatórias — nunca omita nenhuma.
+        - O campo "branches" deve conter SOMENTE nomes de branches no formato: palavra_palavra, palavra/palavra, ou palavra-palavra. NUNCA texto descritivo.
+        - TODO o conteúdo textual (exceto branches) deve estar em PORTUGUÊS do Brasil.
       `,
       description: 'Template padrão para gerar planos de teste detalhados',
       parameters: ['appDescription', 'requirements', 'additionalContext', 'branches'],
@@ -389,7 +389,7 @@ export const loadConfig = (): AIModelConfig => {
     }
   });
 
-  const merged = { ...stored, models, tasks };
+  const merged = { ...stored, models, tasks, promptTemplates: defaultConfig.promptTemplates };
   localStorage.setItem(getMcpConfigKey(), JSON.stringify(merged));
   return merged;
 };

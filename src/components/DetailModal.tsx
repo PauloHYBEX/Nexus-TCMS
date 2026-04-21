@@ -508,18 +508,29 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       if (plan.criteria?.trim()) parts.push(`Critérios:\n${plan.criteria}`);
       if (opts?.additionalContext?.trim()) parts.push(`Contexto adicional (usuário):\n${opts.additionalContext.trim()}`);
       if (branchImages.length > 0) parts.push(`Branches da sprint detectadas: ${branchImages.length} imagem(ns) anexadas (ver dados visuais).`);
+
+      // Extrair branches reais do plano para direcionar os casos
+      const planBranchesRaw = (plan as any).branches?.toString().trim() || '';
+      const branchLines = planBranchesRaw
+        .split('\n')
+        .map((l: string) => l.replace(/^[\*\-]\s*/, '').trim())
+        .filter((l: string) => l && /^[\w\-\/\.]+$/.test(l));
+
       const documentContent = parts.join('\n\n');
 
+      const branchInstruction = branchLines.length > 0
+        ? `\n      BRANCHES DA SPRINT (CRÍTICO): Este plano cobre as seguintes branches: ${branchLines.join(', ')}.\n      - Crie EXATAMENTE um caso de teste para cada branch listada acima.\n      - O título de cada caso deve mencionar explicitamente o nome da branch ou funcionalidade correspondente.\n      - Não crie casos genéricos: cada caso deve ser específico para sua branch/funcionalidade.`
+        : '';
+
       const prompt = `
-      Analise o seguinte documento${branchImages.length > 0 ? ' e as imagens de branches da sprint anexadas' : ''} e identifique AUTONOMAMENTE diferentes funcionalidades, cenários ou fluxos que necessitam de casos de teste específicos.
+      Analise o seguinte documento${branchImages.length > 0 ? ' e as imagens de branches da sprint anexadas' : ''} e crie casos de teste específicos para cada funcionalidade/branch identificada.${branchInstruction}
 
       DOCUMENTO:
       ${documentContent}
 
       INSTRUÇÕES IMPORTANTES:
-      - Analise o documento e identifique automaticamente as diferentes funcionalidades/cenários
-      - Para cada funcionalidade identificada, crie casos de teste específicos e detalhados
-      - Seja DIRETO e ESPECÍFICO, evite contexto desnecessário
+      - Para cada branch ou funcionalidade, crie UM caso de teste específico e detalhado
+      - Seja DIRETO e ESPECÍFICO, o título do caso deve refletir a branch/funcionalidade
       - Cada caso deve ser independente e testável
       - Inclua passos de teste detalhados
 
@@ -715,101 +726,73 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           )}
 
           {type === 'plan' && (() => {
-            const obj      = (item as any).objective?.toString().trim();
-            const scope    = (item as any).scope?.toString().trim();
-            const approach = (item as any).approach?.toString().trim();
-            const criteria = (item as any).criteria?.toString().trim();
-            const resources= (item as any).resources?.toString().trim();
-            const schedule = (item as any).schedule?.toString().trim();
-            const risks    = (item as any).risks?.toString().trim();
-            // Campo dedicado branches (novo formato); fallback para resources
+            const obj       = (item as any).objective?.toString().trim();
+            const scope     = (item as any).scope?.toString().trim();
+            const approach  = (item as any).approach?.toString().trim();
+            const criteria  = (item as any).criteria?.toString().trim();
+            const resources = (item as any).resources?.toString().trim();
+            const schedule  = (item as any).schedule?.toString().trim();
+            const risks     = (item as any).risks?.toString().trim();
             const branchesRaw = ((item as any).branches?.toString().trim()) || '';
 
-            // Parseia o campo branches estruturado em grupos (Front-end / Back-end / Geral)
-            // e também suporta o formato legado "branch: a, b, c" do campo resources
+            const isBranchName = (s: string): boolean => {
+              if (!s || s.length > 80) return false;
+              if (/\*\*/.test(s)) return false;
+              if (/[.,:;!?]\s/.test(s)) return false;
+              return /^[\w\-\/\.]+$/.test(s);
+            };
+
             const parseBranchGroups = (raw: string): { group: string; items: string[] }[] => {
               if (!raw) return [];
-              // Formato novo: linhas com grupo seguido de itens com *
-              const groupRegex = /^(.+?):\s*$/;
               const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
               const groups: { group: string; items: string[] }[] = [];
               let current: { group: string; items: string[] } | null = null;
+              const groupHeaderRex = /^([A-Za-zÀ-ú\s\-]+):$/;
               for (const line of lines) {
-                if (groupRegex.test(line) && !line.startsWith('*') && !line.startsWith('-')) {
-                  current = { group: line.replace(/:$/, ''), items: [] };
+                const cleaned = line.replace(/^[\*\-]\s*/, '').trim();
+                if (groupHeaderRex.test(line) && !line.startsWith('*') && !line.startsWith('-')) {
+                  current = { group: line.replace(/:$/, '').trim(), items: [] };
                   groups.push(current);
-                } else if (current && (line.startsWith('*') || line.startsWith('-'))) {
-                  current.items.push(line.replace(/^[\*\-]\s*/, '').trim());
-                } else if (!current && line) {
-                  // Formato legado: split por vírgula
-                  const legacyMatch = line.match(/branch[es]*\s*:\s*(.+)/i);
-                  const src = legacyMatch ? legacyMatch[1] : line;
-                  const items = src.split(',').map(b => b.trim()).filter(Boolean);
-                  if (items.length > 0) groups.push({ group: 'Geral', items });
-                  break;
+                } else if (isBranchName(cleaned)) {
+                  if (!current) { current = { group: 'Geral', items: [] }; groups.push(current); }
+                  current.items.push(cleaned);
                 }
               }
-              return groups;
+              return groups.filter(g => g.items.length > 0);
             };
 
             const branchGroups = parseBranchGroups(branchesRaw);
-            // Fallback legado: tenta extrair do resources se branches estiver vazio
-            const legacyBranchGroups = branchGroups.length === 0 && resources
-              ? parseBranchGroups(resources)
-              : [];
+            const legacyBranchGroups = branchGroups.length === 0 && resources ? parseBranchGroups(resources) : [];
             const allBranchGroups = branchGroups.length > 0 ? branchGroups : legacyBranchGroups;
             const totalBranches = allBranchGroups.reduce((acc, g) => acc + g.items.length, 0);
 
             if (!obj && !scope && !approach && !criteria && !resources && !schedule && !risks && allBranchGroups.length === 0) return null;
+
+            const gridItems: { label: string; content: string }[] = [
+              obj      ? { label: 'Objetivo',   content: obj }      : null,
+              scope    ? { label: 'Escopo',     content: scope }    : null,
+              approach ? { label: 'Abordagem',  content: approach } : null,
+              criteria ? { label: 'Critérios',  content: criteria } : null,
+              schedule ? { label: 'Cronograma', content: schedule } : null,
+              risks    ? { label: 'Riscos',     content: risks }    : null,
+              (resources && allBranchGroups.length === 0) ? { label: 'Recursos', content: resources } : null,
+            ].filter(Boolean) as { label: string; content: string }[];
+
             return (
               <>
-                {/* Grade principal — 2 colunas */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                  {obj && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Objetivo</h3>
-                      {renderListOrParagraph(obj)}
-                    </div>
-                  )}
-                  {scope && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Escopo</h3>
-                      {renderListOrParagraph(scope)}
-                    </div>
-                  )}
-                  {approach && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Abordagem</h3>
-                      {renderListOrParagraph(approach)}
-                    </div>
-                  )}
-                  {criteria && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Critérios</h3>
-                      {renderListOrParagraph(criteria)}
-                    </div>
-                  )}
-                  {schedule && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Cronograma</h3>
-                      {renderListOrParagraph(schedule)}
-                    </div>
-                  )}
-                  {risks && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Riscos</h3>
-                      {renderListOrParagraph(risks)}
-                    </div>
-                  )}
-                  {resources && allBranchGroups.length === 0 && (
-                    <div className="self-start">
-                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Recursos</h3>
-                      {renderListOrParagraph(resources)}
-                    </div>
-                  )}
-                </div>
-
-                {/* Branches — card destacado */}
+                {gridItems.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                    {gridItems.map((field, idx) => {
+                      const spanFull = (idx === gridItems.length - 1) && (gridItems.length % 2 !== 0);
+                      return (
+                        <div key={field.label} className={`self-start${spanFull ? ' md:col-span-2' : ''}`}>
+                          <h3 className="text-sm font-semibold text-foreground mb-1.5">{field.label}</h3>
+                          {renderListOrParagraph(field.content)}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 {allBranchGroups.length > 0 && (
                   <div className="rounded-lg border border-brand/30 bg-brand/5 p-3.5">
                     <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-3">
@@ -817,11 +800,13 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                       Branches de Entrega
                       <span className="ml-auto text-xs font-normal text-muted-foreground">{totalBranches} branch{totalBranches !== 1 ? 'es' : ''}</span>
                     </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2.5">
                       {allBranchGroups.map((group, gi) => (
                         <div key={gi}>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{group.group}</p>
-                          <div className="flex flex-col gap-1">
+                          {allBranchGroups.length > 1 && (
+                            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">{group.group}</p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
                             {group.items.map((b, i) => (
                               <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 px-2 py-0.5 text-xs font-mono text-brand">
                                 <span className="opacity-60">#</span>{b}
