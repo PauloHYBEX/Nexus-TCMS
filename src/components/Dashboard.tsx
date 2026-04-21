@@ -232,7 +232,7 @@ export const Dashboard = () => {
         ...defects.map(d => ({ id: d.id, type: 'defect' as const, title: d.title, updated_at: d.updated_at, data: d })),
       ];
       allItems.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
-      setRecentItems(allItems.slice(0, 6));
+      setRecentItems(allItems.slice(0, 7));
     } catch (e) {
       console.error('Dashboard load error:', e);
     } finally {
@@ -386,7 +386,7 @@ export const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
 
         {/* Progresso */}
-        <div className="lg:col-span-3 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '320px' }}>
+        <div className="lg:col-span-3 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '380px' }}>
           <div className="flex items-center justify-between shrink-0 mb-3">
             <p className="text-sm font-semibold">Progresso por Plano</p>
             <button className="text-xs text-brand hover:underline flex items-center gap-0.5" onClick={() => navigate('/plans')}>
@@ -420,7 +420,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Atividade Recente */}
-        <div className="lg:col-span-2 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '300px' }}>
+        <div className="lg:col-span-2 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '340px' }}>
           <p className="text-sm font-semibold mb-2 shrink-0">Atividade Recente</p>
           {recentItems.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">Nenhuma atividade recente.</p>
