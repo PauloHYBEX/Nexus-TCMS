@@ -8,7 +8,6 @@ import {
   Kanban,
   Bot,
   TrendingUp,
-  Clock,
   ShieldCheck,
   FolderKanban,
   Users,
@@ -29,7 +28,6 @@ const navigation = [
   { name: 'Execuções',       href: '/executions',   icon: Play,            color: 'text-green-400',  requiredPermission: 'can_manage_executions' },
   { name: 'Gestão',          href: '/management',   icon: Kanban,          color: 'text-orange-400', requiredPermission: null },
   { name: 'Relatórios',      href: '/reports',      icon: TrendingUp,      color: 'text-pink-400',   requiredPermission: 'can_view_reports' },
-  { name: 'Histórico',       href: '/history',      icon: Clock,           color: 'text-sky-400',    requiredPermission: null },
 ];
 
 // Itens administrativos (sub-menu colapsável)

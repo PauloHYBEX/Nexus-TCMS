@@ -17,8 +17,9 @@ import {
   Users, Loader2, Search, UserPlus, Trash2, ChevronDown, ChevronUp,
   Shield, UserCog, RefreshCcw, Check, X as XIcon, Mail, Crown,
   FileText, ClipboardCheck, Play, BarChart3, Download, Sparkles,
-  Zap, Settings, Link2, Bug, Activity, Eye, Lock,
+  Zap, Settings, Link2, Bug, Activity, Eye, Lock, Clock,
 } from 'lucide-react';
+import { ActivityLogPanel } from '@/components/ActivityLogPanel';
 
 const SINGLE_TENANT = String(import.meta.env?.VITE_SINGLE_TENANT ?? 'true') === 'true';
 
@@ -411,6 +412,12 @@ export const UserManagement = () => {
                 <span className="ml-1.5 bg-brand/20 text-brand text-xs rounded-full px-1.5 py-0.5">{roleRequests.length}</span>
               )}
             </TabsTrigger>
+            {isMaster() && (
+              <TabsTrigger value="logs" className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Log Geral
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Busca */}
@@ -501,9 +508,9 @@ export const UserManagement = () => {
                         </div>
                       </div>
 
-                      {/* Expanded permissions panel */}
+                      {/* Expanded permissions + log panel */}
                       {isExpanded && (
-                        <div className="px-4 py-4 bg-muted/10 border-t border-border space-y-4">
+                        <div className="px-4 py-4 bg-muted/10 border-t border-border space-y-5">
                           <div className="flex items-center gap-2 justify-between">
                             <div className="flex items-center gap-1.5 text-sm font-medium">
                               <Shield className="h-4 w-4 text-muted-foreground" />
@@ -554,6 +561,17 @@ export const UserManagement = () => {
                               </div>
                             ))}
                           </div>
+
+                          {/* Log de atividades do usuário */}
+                          {isMaster() && (
+                            <div>
+                              <div className="flex items-center gap-1.5 text-sm font-medium mb-3">
+                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                Atividades de {u.profile?.display_name || u.email}
+                              </div>
+                              <ActivityLogPanel userId={u.id} showUserColumn={false} />
+                            </div>
+                          )}
                         </div>
                       )}
                     </React.Fragment>
@@ -563,6 +581,13 @@ export const UserManagement = () => {
             </div>
           )}
         </TabsContent>
+
+        {/* ── Tab: Logs Gerais (master) ── */}
+        {isMaster() && (
+          <TabsContent value="logs" className="mt-4">
+            <ActivityLogPanel userId={null} showUserColumn />
+          </TabsContent>
+        )}
 
         {/* ── Tab: Solicitações ── */}
         <TabsContent value="requests" className="mt-4">
