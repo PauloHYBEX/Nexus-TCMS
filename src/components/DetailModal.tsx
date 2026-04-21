@@ -516,6 +516,20 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         .map((l: string) => l.replace(/^[\*\-]\s*/, '').trim())
         .filter((l: string) => l && /^[\w\-\/\.]+$/.test(l));
 
+      // Fallback: extrair "sprint_DD_MM" do cronograma do plano
+      // Ex.: "início em 23/06/2025" -> "sprint_23_06"
+      const extractSprintFallback = (): string => {
+        const schedule = plan.schedule || plan.description || '';
+        const m = schedule.match(/(\d{1,2})[\/\-_](\d{1,2})/);
+        if (m) {
+          const dd = m[1].padStart(2, '0');
+          const mm = m[2].padStart(2, '0');
+          return `sprint_${dd}_${mm}`;
+        }
+        return '';
+      };
+      const sprintFallback = extractSprintFallback();
+
       const documentContent = parts.join('\n\n');
 
       const branchInstruction = branchLines.length > 0
@@ -591,13 +605,36 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             ? c.steps.split(/\r?\n/).filter(Boolean).map((line: string) => ({ action: line.trim(), expected_result: '' }))
             : []
         );
-        // Associa branch: 1) campo retornado pela IA (se for token valido) 2) round-robin
+        // Associa branch com prioridades:
+        // 1) IA retornou um token valido
+        // 2) Matching por similaridade titulo<->branch (palavras em comum)
+        // 3) Round-robin nas branches do plano
+        // 4) Fallback sprint_DD_MM do cronograma
         const isValidBranch = (s: string) => !!s && s.length >= 3 && s.length <= 100
           && !/\*\*/.test(s) && !/\s/.test(s) && /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
         const iaBranchRaw = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || '';
         const iaBranch = isValidBranch(iaBranchRaw) ? iaBranchRaw : '';
-        const fallbackBranch = branchLines.length > 0 ? branchLines[idx % branchLines.length] : '';
-        const caseBranch = iaBranch || fallbackBranch || '';
+
+        // Matching por similaridade: extrai tokens do titulo e compara com tokens da branch
+        const matchBranchByTitle = (): string => {
+          if (branchLines.length === 0) return '';
+          const title = (typeof c?.title === 'string' ? c.title : '').toLowerCase();
+          const titleTokens = new Set(
+            title.split(/[^\wÀ-ú]+/).filter((t: string) => t.length >= 3).map((t: string) => t.toLowerCase())
+          );
+          let bestBranch = '';
+          let bestScore = 0;
+          for (const br of branchLines) {
+            const brTokens = br.toLowerCase().split(/[_\-\/\.]+/).filter(t => t.length >= 3);
+            const score = brTokens.reduce((acc, t) => acc + (titleTokens.has(t) ? 1 : 0), 0);
+            if (score > bestScore) { bestScore = score; bestBranch = br; }
+          }
+          return bestScore > 0 ? bestBranch : '';
+        };
+
+        const matchedBranch = matchBranchByTitle();
+        const rrBranch = branchLines.length > 0 ? branchLines[idx % branchLines.length] : '';
+        const caseBranch = iaBranch || matchedBranch || rrBranch || sprintFallback || '';
         return {
           plan_id: plan.id,
           title: sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`),
