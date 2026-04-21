@@ -882,21 +882,18 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             );
           })()}
 
-          {type === 'case' && 'steps' in item && (
+          {type === 'case' && 'steps' in item && (() => {
+            const rawBranches = (item as any).branches?.toString().trim() || '';
+            const isValidBranchToken = (s: string) => !!s && s.length >= 3 && s.length <= 100
+              && !/\*\*/.test(s) && /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
+            const branchTokens = rawBranches.split(/[\s,;]+/).map((b: string) => b.trim()).filter(isValidBranchToken);
+            return (
             <div className="space-y-4">
-              {(() => {
-                const raw = (item as any).branches?.toString().trim() || '';
-                if (!raw) return null;
-                // Aceita so tokens que parecem branch real (sem espacos, pelo menos 3 chars)
-                const isValid = (s: string) => !!s && s.length >= 3 && s.length <= 100
-                  && !/\*\*/.test(s) && /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
-                const tokens = raw.split(/[\s,;]+/).map((b: string) => b.trim()).filter(isValid);
-                if (tokens.length === 0) return null;
-                return (
+              {branchTokens.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Branch</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {tokens.map((b: string, i: number) => (
+                    {branchTokens.map((b: string, i: number) => (
                       <button
                         key={i}
                         type="button"
@@ -916,8 +913,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                     ))}
                   </div>
                 </div>
-                );
-              })()}
+              )}
               {item.preconditions && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Pré-condições</h3>
@@ -945,7 +941,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
 
           {type === 'execution' && 'actual_result' in item && (
             <div className="space-y-4">
