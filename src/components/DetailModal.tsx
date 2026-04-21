@@ -591,10 +591,13 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             ? c.steps.split(/\r?\n/).filter(Boolean).map((line: string) => ({ action: line.trim(), expected_result: '' }))
             : []
         );
-        // Associa branch: 1) campo retornado pela IA 2) round-robin na lista de branches do plano
-        const iaBranch = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || '';
+        // Associa branch: 1) campo retornado pela IA (se for token valido) 2) round-robin
+        const isValidBranch = (s: string) => !!s && s.length >= 3 && s.length <= 100
+          && !/\*\*/.test(s) && !/\s/.test(s) && /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
+        const iaBranchRaw = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || '';
+        const iaBranch = isValidBranch(iaBranchRaw) ? iaBranchRaw : '';
         const fallbackBranch = branchLines.length > 0 ? branchLines[idx % branchLines.length] : '';
-        const caseBranch = iaBranch || fallbackBranch;
+        const caseBranch = iaBranch || fallbackBranch || '';
         return {
           plan_id: plan.id,
           title: sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`),
@@ -881,11 +884,19 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
           {type === 'case' && 'steps' in item && (
             <div className="space-y-4">
-              {((item as any).branches?.toString().trim()) && (
+              {(() => {
+                const raw = (item as any).branches?.toString().trim() || '';
+                if (!raw) return null;
+                // Aceita so tokens que parecem branch real (sem espacos, pelo menos 3 chars)
+                const isValid = (s: string) => !!s && s.length >= 3 && s.length <= 100
+                  && !/\*\*/.test(s) && /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
+                const tokens = raw.split(/[\s,;]+/).map((b: string) => b.trim()).filter(isValid);
+                if (tokens.length === 0) return null;
+                return (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Branch</h3>
                   <div className="flex flex-wrap gap-1.5">
-                    {(item as any).branches.toString().split(/[\s,;]+/).map((b: string) => b.trim()).filter(Boolean).map((b: string, i: number) => (
+                    {tokens.map((b: string, i: number) => (
                       <button
                         key={i}
                         type="button"
@@ -905,7 +916,8 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                     ))}
                   </div>
                 </div>
-              )}
+                );
+              })()}
               {item.preconditions && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Pré-condições</h3>
