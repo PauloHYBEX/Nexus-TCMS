@@ -331,13 +331,23 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
           const filtered = filterToTableCols(table, base);
           if (SEQ_TABLES.has(table) && filtered.sequence == null) {
             if (nextSeq === null) {
-              // Lista todas as sequences existentes ordenadas para achar o 1o gap
-              const { rows: seqRows } = query(
-                `SELECT sequence FROM ${table} WHERE sequence IS NOT NULL ORDER BY sequence ASC`,
-                []
-              );
+              // Sequencia por PROJETO — se a tabela tem project_id e o row tambem,
+              // filtra para que cada projeto tenha sua propria numeracao comecando em 1
+              const tableCols = getTableCols(table);
+              const hasProjectCol = tableCols.has('project_id');
+              const projectId = filtered.project_id || null;
+              let seqSql = `SELECT sequence FROM ${table} WHERE sequence IS NOT NULL`;
+              const seqParams = [];
+              if (hasProjectCol && projectId) {
+                seqSql += ' AND project_id = ?';
+                seqParams.push(projectId);
+              } else if (hasProjectCol) {
+                // Row sem project_id em tabela com project_id: so conta outros sem project_id
+                seqSql += ' AND project_id IS NULL';
+              }
+              seqSql += ' ORDER BY sequence ASC';
+              const { rows: seqRows } = query(seqSql, seqParams);
               const existing = new Set(seqRows.map(r => Number(r.sequence)).filter(n => Number.isFinite(n) && n > 0));
-              // Encontra o menor inteiro positivo nao usado, comecando em 1
               let candidate = 1;
               while (existing.has(candidate)) candidate++;
               nextSeq = candidate;
