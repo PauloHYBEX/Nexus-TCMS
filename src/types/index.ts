@@ -42,6 +42,8 @@ export interface TestCase {
   generated_by_ai: boolean;
   // Número sequencial opcional para exibição amigável (preenchido via migração)
   sequence?: number;
+  // Branch(es) de código-fonte ligada(s) a este caso (ex: "sprint_16_06_login")
+  branches?: string;
 }
 
 export interface TestStep {

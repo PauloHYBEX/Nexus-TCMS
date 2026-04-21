@@ -241,6 +241,12 @@ const defaultConfig: AIModelConfig = {
         - TODAS as chaves são obrigatórias — nunca omita nenhuma.
         - O campo "branches" deve conter SOMENTE nomes de branches no formato: palavra_palavra, palavra/palavra, ou palavra-palavra. NUNCA texto descritivo.
         - TODO o conteúdo textual (exceto branches) deve estar em PORTUGUÊS do Brasil.
+        - IGNORE COMPLETAMENTE os seguintes itens do documento — eles NÃO são testáveis e NÃO devem aparecer em NENHUM campo (scope, branches, cronograma, etc):
+          * "Atividades Recorrentes" (com ou sem nome de pessoa, ex: "Atividades Recorrentes - Miguel")
+          * "Reunião", "Reuniões", "Ata", "Daily", "Planning", "Retro", "Review"
+          * "Cerimônias", "Marcos", "Kickoff", "Follow-up"
+          * Qualquer entrada que seja apenas descritiva do processo de desenvolvimento (não da funcionalidade entregue).
+        - No campo "scope" inclua APENAS funcionalidades/entregas que geram código testável (features, bugfixes, refactors, mudanças de endpoint).
       `,
       description: 'Template padrão para gerar planos de teste detalhados',
       parameters: ['appDescription', 'requirements', 'additionalContext', 'branches'],

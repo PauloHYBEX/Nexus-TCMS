@@ -213,6 +213,7 @@ function filterToTableCols(table, obj) {
     'ALTER TABLE activity_logs ADD COLUMN metadata TEXT DEFAULT \'{}\'',
     'ALTER TABLE projects ADD COLUMN icon TEXT DEFAULT \'\'',
     'ALTER TABLE test_plans ADD COLUMN branches TEXT DEFAULT \'\'',
+    'ALTER TABLE test_cases ADD COLUMN branches TEXT DEFAULT \'\'',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }
@@ -330,21 +331,16 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
           const filtered = filterToTableCols(table, base);
           if (SEQ_TABLES.has(table) && filtered.sequence == null) {
             if (nextSeq === null) {
-              // Busca o menor sequence disponível (recicla gaps de IDs excluídos)
-              const { rows: gaps } = query(
-                `SELECT MIN(t1.sequence + 1) AS next_avail FROM ${table} t1 ` +
-                `WHERE t1.sequence + 1 NOT IN (SELECT sequence FROM ${table} WHERE sequence IS NOT NULL) ` +
-                `AND t1.sequence IS NOT NULL`,
+              // Lista todas as sequences existentes ordenadas para achar o 1o gap
+              const { rows: seqRows } = query(
+                `SELECT sequence FROM ${table} WHERE sequence IS NOT NULL ORDER BY sequence ASC`,
                 []
               );
-              const minGap = gaps[0]?.next_avail;
-              if (minGap) {
-                nextSeq = minGap;
-              } else {
-                // Se não há gaps, usa MAX + 1
-                const { rows: mx } = query('SELECT COALESCE(MAX(sequence), 0) AS current FROM ' + table, []);
-                nextSeq = (mx[0]?.current || 0) + 1;
-              }
+              const existing = new Set(seqRows.map(r => Number(r.sequence)).filter(n => Number.isFinite(n) && n > 0));
+              // Encontra o menor inteiro positivo nao usado, comecando em 1
+              let candidate = 1;
+              while (existing.has(candidate)) candidate++;
+              nextSeq = candidate;
             }
             filtered.sequence = nextSeq++;
           }

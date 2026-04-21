@@ -981,7 +981,7 @@ export const TestPlans = () => {
           </AlertDialogHeader>
 
           {/* Conteúdo em div ao invés de AlertDialogDescription para evitar nesting inválido */}
-          <div className="text-sm text-muted-foreground space-y-3">
+          <div className="text-sm text-muted-foreground space-y-3 min-w-0">
             {linkedCounts == null && <span>Verificando dependências...</span>}
 
             {linkedCounts && (linkedCounts.testCaseCount > 0 || linkedCounts.executionCount > 0 || (linkedCounts.defectCount || 0) > 0) && (
@@ -1011,7 +1011,7 @@ export const TestPlans = () => {
 
                 {/* Lista de Casos de Teste */}
                 {linkedDetails && linkedDetails.testCases.length > 0 && (
-                  <div className="border rounded p-2 bg-muted/30">
+                  <div className="border rounded p-2 bg-muted/30 w-full overflow-hidden">
                     <div className="text-xs font-medium mb-1 text-blue-700">Casos de Teste:</div>
                     <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
                       {linkedDetails.testCases.map(tc => (
@@ -1030,7 +1030,7 @@ export const TestPlans = () => {
 
                 {/* Lista de Execuções */}
                 {linkedDetails && linkedDetails.executions.length > 0 && (
-                  <div className="border rounded p-2 bg-muted/30">
+                  <div className="border rounded p-2 bg-muted/30 w-full overflow-hidden">
                     <div className="text-xs font-medium mb-1 text-green-700">Execuções:</div>
                     <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
                       {linkedDetails.executions.map(ex => (
@@ -1049,7 +1049,7 @@ export const TestPlans = () => {
 
                 {/* Lista de Defeitos */}
                 {linkedDetails && linkedDetails.defects.length > 0 && (
-                  <div className="border rounded p-2 bg-muted/30">
+                  <div className="border rounded p-2 bg-muted/30 w-full overflow-hidden">
                     <div className="text-xs font-medium mb-1 text-red-700">Defeitos:</div>
                     <div className="text-xs space-y-0.5 max-h-20 overflow-y-auto">
                       {linkedDetails.defects.map(d => (

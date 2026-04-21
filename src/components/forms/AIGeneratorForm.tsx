@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/components/ui/use-toast';
 import { Sparkles, Loader2, Zap, FileText, FlaskConical, Play, Upload, AlertCircle } from 'lucide-react';
-import { getTestPlans, getTestCases, createTestPlan, createTestCase, createTestExecution } from '@/services/supabaseService';
+import { getTestPlans, getTestCases, createTestPlan, createTestCase, createTestExecution, createRequirement, linkCaseToRequirement } from '@/services/supabaseService';
 import { TestPlan, TestCase, AIModelTask, AIModel } from '@/types';
 import * as ModelControlService from '@/services/modelControlService';
 import { cn } from '@/lib/utils';
@@ -263,6 +263,20 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
             project_id: currentProject.id,
             generated_by_ai: true
           } as any);
+          // Auto-criar requisito + vínculo para o caso gerado
+          try {
+            const newReq = await createRequirement({
+              user_id: user.id,
+              project_id: currentProject.id,
+              title: newCase.title,
+              description: `Requisito gerado automaticamente a partir do caso: ${newCase.title}`,
+              priority: (newCase.priority || 'medium') as any,
+              status: 'open',
+            } as any);
+            await linkCaseToRequirement(user.id, newReq.id, newCase.id);
+          } catch (err) {
+            console.warn('[AI Case] falha ao criar requisito automatico:', err);
+          }
           results.push({ ...newCase, type: 'case' });
         } else if (formData.type === 'execution') {
           const newExecution = await createTestExecution({

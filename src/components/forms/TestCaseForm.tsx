@@ -40,7 +40,8 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
     expected_result: '',
     priority: 'medium' as const,
     type: 'functional' as const,
-    plan_id: planId || ''
+    plan_id: planId || '',
+    branches: ''
   });
   const [steps, setSteps] = useState<TestStep[]>([
     { id: '1', action: '', expected_result: '', order: 1 }
@@ -67,7 +68,8 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
         expected_result: initialData.expected_result || '',
         priority: (initialData.priority as any) || 'medium',
         type: (initialData.type as any) || 'functional',
-        plan_id: initialData.plan_id || planId || ''
+        plan_id: initialData.plan_id || planId || '',
+        branches: (initialData as any).branches || ''
       });
       setSteps(
         (Array.isArray(initialData.steps) && initialData.steps.length > 0)
@@ -410,6 +412,17 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
 
       {showAdvanced && (
         <div className="space-y-4 pt-1 border-t border-border/40">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Branch(es)</Label>
+            <Textarea
+              value={formData.branches}
+              onChange={(e) => handleChange('branches', e.target.value)}
+              rows={1}
+              placeholder="Ex: sprint_16_06_login ou feature/checkout (separe por espaço)"
+              className="bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0 resize-none font-mono text-xs"
+            />
+          </div>
+
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Pré-condições</Label>
             <Textarea

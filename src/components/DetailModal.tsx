@@ -544,6 +544,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             "expected_result": "resultado esperado final",
             "priority": "medium",
             "type": "functional",
+            "branch": "<nome exato da branch deste caso — copie da lista acima, sem # ou prefixo>",
             "steps": [
               {
                 "action": "ação a ser executada",
@@ -587,6 +588,9 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             ? c.steps.split(/\r?\n/).filter(Boolean).map((line: string) => ({ action: line.trim(), expected_result: '' }))
             : []
         );
+        // Tenta associar a branch correspondente: primeiro pela propriedade branch/branches
+        // retornada pela IA, senao pelo indice na lista de branches do plano
+        const caseBranch = (typeof c?.branch === 'string' && c.branch.trim()) || (typeof c?.branches === 'string' && c.branches.trim()) || branchLines[idx] || '';
         return {
           plan_id: plan.id,
           title: sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`),
@@ -595,6 +599,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           expected_result: sanitizeText(typeof c?.expected_result === 'string' ? c.expected_result : ''),
           priority: sanitizeText(typeof c?.priority === 'string' ? c.priority : 'medium'),
           type: sanitizeText(typeof c?.type === 'string' ? c.type : 'functional'),
+          branches: sanitizeText(caseBranch),
           steps: stepsArray.map((s: any, i: number) => ({
             id: crypto.randomUUID(),
             action: sanitizeText(s?.action),
@@ -608,14 +613,37 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         };
       });
 
-      const { error } = await supabase
+      const { data: insertedCases, error } = await supabase
         .from('test_cases')
-        .insert(casesToInsert);
+        .insert(casesToInsert)
+        .select();
       if (error) throw error;
+
+      // Auto-criar requisito + vínculo para cada caso gerado
+      let reqCount = 0;
+      if (Array.isArray(insertedCases) && insertedCases.length > 0) {
+        const { createRequirement, linkCaseToRequirement } = await import('@/services/supabaseService');
+        await Promise.all(insertedCases.map(async (tc: any) => {
+          try {
+            const newReq = await createRequirement({
+              user_id: plan.user_id,
+              project_id: (plan as any).project_id,
+              title: tc.title,
+              description: `Requisito gerado automaticamente a partir do caso: ${tc.title}`,
+              priority: (tc.priority || 'medium') as any,
+              status: 'open',
+            } as any);
+            await linkCaseToRequirement(plan.user_id, newReq.id, tc.id);
+            reqCount++;
+          } catch (err) {
+            console.warn('[AI Cases] falha ao criar requisito para caso', tc.id, err);
+          }
+        }));
+      }
 
       toast({
         title: 'Sucesso',
-        description: `${casesToInsert.length} casos gerados pela IA e vinculados a este plano.`
+        description: `${casesToInsert.length} caso(s) e ${reqCount} requisito(s) criados e vinculados ao plano.`
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -842,6 +870,31 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
           {type === 'case' && 'steps' in item && (
             <div className="space-y-4">
+              {((item as any).branches?.toString().trim()) && (
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-1.5">Branch</h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(item as any).branches.toString().split(/[\s,;]+/).map((b: string) => b.trim()).filter(Boolean).map((b: string, i: number) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(b);
+                            toast({ title: 'Branch copiada', description: b });
+                          } catch {
+                            toast({ title: 'Falha ao copiar', description: b, variant: 'destructive' });
+                          }
+                        }}
+                        title={`Copiar ${b}`}
+                        className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 hover:bg-brand/20 active:scale-95 transition px-2 py-0.5 text-xs font-mono text-brand cursor-pointer"
+                      >
+                        <span className="opacity-60">#</span>{b}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {item.preconditions && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Pré-condições</h3>
