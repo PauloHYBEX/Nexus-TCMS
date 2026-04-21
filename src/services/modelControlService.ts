@@ -220,28 +220,31 @@ const defaultConfig: AIModelConfig = {
         Gere um plano de teste detalhado em PORTUGUÊS baseado nas seguintes informações:
         - Descrição da Aplicação: {{appDescription}}
         - Contexto Adicional: {{additionalContext}}
-        - Requisitos: {{requirements}}
+        - Requisitos / Documento da Sprint: {{requirements}}
         
-        Retorne um objeto JSON com EXATAMENTE esta estrutura:
-        - schemaVersion: DEVE ser exatamente "plan.v1"
-        - title: Título do plano de teste em português
-        - description: Descrição clara dos objetivos do plano em português
-        - objective: Objetivo principal do plano em português
-        - scope: Escopo detalhado do plano em português
-        - approach: Abordagem/metodologia de teste em português
-        - criteria: Critérios de entrada e saída em português
-        - resources: OBRIGATÓRIO — Analise o documento/requisitos fornecidos e identifique TODAS as branches, funcionalidades, módulos ou entregas da sprint mencionados. Liste-os separados por vírgula no formato: "branch: <nome1>, <nome2>, <nome3>, ...". Se não houver branches explícitas, liste as funcionalidades principais como itens. Exemplo: "branch: feature/login, feature/checkout, fix/payment-bug". NÃO deixe este campo vazio.
-        - schedule: Cronograma e marcos em português
-        - risks: Riscos potenciais e mitigações em português
+        Retorne um objeto JSON com EXATAMENTE esta estrutura (sem omitir nenhuma chave):
+        {
+          "schemaVersion": "plan.v1",
+          "title": "<Título do plano em português>",
+          "description": "<Descrição clara dos objetivos, 2-3 frases>",
+          "objective": "<Objetivo principal do plano, 2-3 frases>",
+          "scope": "<Escopo detalhado: liste cada funcionalidade/entrega como item de lista usando o caractere *>",
+          "approach": "<Abordagem/metodologia: liste cada tipo de teste como item de lista usando o caractere *>",
+          "criteria": "<Critérios de entrada e saída: liste cada critério como item de lista usando o caractere *>",
+          "resources": "<OBRIGATÓRIO — Recursos humanos e ferramentas necessários. Exemplo: Equipe: QA, Dev. Ferramentas: Selenium, Postman.>",
+          "schedule": "<Cronograma e marcos principais da sprint em português>",
+          "risks": "<Riscos potenciais e suas mitigações: liste cada risco como item de lista usando o caractere *>",
+          "branches": "<CRÍTICO — Extraia do documento todas as branches de entrega mencionadas, separando obrigatoriamente por tipo. Use o formato EXATO abaixo:\nFront-end:\n* <branch1>\n* <branch2>\nBack-end:\n* <branch1>\n* <branch2>\nSe não houver separação Front/Back explícita, liste todas sob um único grupo 'Geral:'. NUNCA deixe este campo vazio — se não encontrar branches explícitas, liste as funcionalidades principais como se fossem branches.>"
+        }
         
-        IMPORTANTE:
-        - Retorne APENAS um objeto JSON, sem comentários ou markdown.
-        - O objeto DEVE conter exatamente as chaves acima.
-        - TODO o conteúdo deve estar em PORTUGUÊS do Brasil.
-        - O campo "resources" é CRÍTICO: deve sempre listar as branches ou funcionalidades identificadas no documento.
+        REGRAS CRÍTICAS:
+        - Retorne APENAS o objeto JSON, sem comentários, sem markdown, sem bloco de código.
+        - TODAS as chaves são obrigatórias — nunca omita nenhuma, mesmo que o conteúdo seja genérico.
+        - O campo "branches" é o mais importante: leia o documento inteiro em busca de nomes de branches (padrões: sprint_XX_YY, feature/xxx, hotfix/xxx, fix/xxx, bugfix/xxx) e liste-os no formato solicitado.
+        - TODO o conteúdo textual deve estar em PORTUGUÊS do Brasil.
       `,
       description: 'Template padrão para gerar planos de teste detalhados',
-      parameters: ['appDescription', 'requirements', 'additionalContext'],
+      parameters: ['appDescription', 'requirements', 'additionalContext', 'branches'],
       createdAt: new Date(),
       updatedAt: new Date(),
       active: true,

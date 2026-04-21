@@ -32,6 +32,7 @@ export const TestPlanV1 = z.object({
   resources: z.preprocess(toStr, z.string().min(1)),
   schedule: z.preprocess(toStr, z.string().min(1)),
   risks: z.preprocess(toStr, z.string().min(1)),
+  branches: z.preprocess(toStr, z.string().default('')).optional(),
   sequence: z.number().int().positive().optional(),
   metadata: z.object({
     sourceDocId: z.string().optional(),

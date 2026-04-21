@@ -715,24 +715,55 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           )}
 
           {type === 'plan' && (() => {
-            const obj = (item as any).objective?.toString().trim();
-            const scope = (item as any).scope?.toString().trim();
+            const obj      = (item as any).objective?.toString().trim();
+            const scope    = (item as any).scope?.toString().trim();
             const approach = (item as any).approach?.toString().trim();
             const criteria = (item as any).criteria?.toString().trim();
-            const resources = (item as any).resources?.toString().trim();
+            const resources= (item as any).resources?.toString().trim();
+            const schedule = (item as any).schedule?.toString().trim();
+            const risks    = (item as any).risks?.toString().trim();
+            // Campo dedicado branches (novo formato); fallback para resources
+            const branchesRaw = ((item as any).branches?.toString().trim()) || '';
 
-            // Parsear branches do campo resources
-            const parseBranches = (res: string): string[] => {
-              if (!res) return [];
-              const match = res.match(/branch[es]*\s*:\s*(.+)/i);
-              const raw = match ? match[1] : res;
-              return raw.split(/,|\n/).map(b => b.replace(/^[\s\-\*\u00ba]+/, '').trim()).filter(Boolean);
+            // Parseia o campo branches estruturado em grupos (Front-end / Back-end / Geral)
+            // e também suporta o formato legado "branch: a, b, c" do campo resources
+            const parseBranchGroups = (raw: string): { group: string; items: string[] }[] => {
+              if (!raw) return [];
+              // Formato novo: linhas com grupo seguido de itens com *
+              const groupRegex = /^(.+?):\s*$/;
+              const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+              const groups: { group: string; items: string[] }[] = [];
+              let current: { group: string; items: string[] } | null = null;
+              for (const line of lines) {
+                if (groupRegex.test(line) && !line.startsWith('*') && !line.startsWith('-')) {
+                  current = { group: line.replace(/:$/, ''), items: [] };
+                  groups.push(current);
+                } else if (current && (line.startsWith('*') || line.startsWith('-'))) {
+                  current.items.push(line.replace(/^[\*\-]\s*/, '').trim());
+                } else if (!current && line) {
+                  // Formato legado: split por vírgula
+                  const legacyMatch = line.match(/branch[es]*\s*:\s*(.+)/i);
+                  const src = legacyMatch ? legacyMatch[1] : line;
+                  const items = src.split(',').map(b => b.trim()).filter(Boolean);
+                  if (items.length > 0) groups.push({ group: 'Geral', items });
+                  break;
+                }
+              }
+              return groups;
             };
-            const branches = parseBranches(resources || '');
 
-            if (!obj && !scope && !approach && !criteria && !resources) return null;
+            const branchGroups = parseBranchGroups(branchesRaw);
+            // Fallback legado: tenta extrair do resources se branches estiver vazio
+            const legacyBranchGroups = branchGroups.length === 0 && resources
+              ? parseBranchGroups(resources)
+              : [];
+            const allBranchGroups = branchGroups.length > 0 ? branchGroups : legacyBranchGroups;
+            const totalBranches = allBranchGroups.reduce((acc, g) => acc + g.items.length, 0);
+
+            if (!obj && !scope && !approach && !criteria && !resources && !schedule && !risks && allBranchGroups.length === 0) return null;
             return (
               <>
+                {/* Grade principal — 2 colunas */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                   {obj && (
                     <div className="self-start">
@@ -758,19 +789,46 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                       {renderListOrParagraph(criteria)}
                     </div>
                   )}
+                  {schedule && (
+                    <div className="self-start">
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Cronograma</h3>
+                      {renderListOrParagraph(schedule)}
+                    </div>
+                  )}
+                  {risks && (
+                    <div className="self-start">
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Riscos</h3>
+                      {renderListOrParagraph(risks)}
+                    </div>
+                  )}
+                  {resources && allBranchGroups.length === 0 && (
+                    <div className="self-start">
+                      <h3 className="text-sm font-semibold text-foreground mb-1.5">Recursos</h3>
+                      {renderListOrParagraph(resources)}
+                    </div>
+                  )}
                 </div>
-                {branches.length > 0 && (
+
+                {/* Branches — card destacado */}
+                {allBranchGroups.length > 0 && (
                   <div className="rounded-lg border border-brand/30 bg-brand/5 p-3.5">
-                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-2.5">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5 mb-3">
                       <span className="h-2 w-2 rounded-full bg-brand inline-block" />
-                      Branches Utilizadas
-                      <span className="ml-auto text-xs font-normal text-muted-foreground">{branches.length} branch{branches.length !== 1 ? 'es' : ''}</span>
+                      Branches de Entrega
+                      <span className="ml-auto text-xs font-normal text-muted-foreground">{totalBranches} branch{totalBranches !== 1 ? 'es' : ''}</span>
                     </h3>
-                    <div className="flex flex-wrap gap-1.5">
-                      {branches.map((b, i) => (
-                        <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 px-2 py-0.5 text-xs font-mono text-brand">
-                          <span className="opacity-60">#</span>{b}
-                        </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {allBranchGroups.map((group, gi) => (
+                        <div key={gi}>
+                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{group.group}</p>
+                          <div className="flex flex-col gap-1">
+                            {group.items.map((b, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 px-2 py-0.5 text-xs font-mono text-brand">
+                                <span className="opacity-60">#</span>{b}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>

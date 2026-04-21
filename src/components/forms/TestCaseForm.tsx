@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/useAuth';
 import { useProject } from '@/contexts/ProjectContext';
-import { createTestCase, getTestPlansByProject, updateTestCase, getRequirementsByProject, linkCaseToRequirement } from '@/services/supabaseService';
+import { createTestCase, getTestPlansByProject, updateTestCase, getRequirementsByProject, linkCaseToRequirement, createRequirement } from '@/services/supabaseService';
 import { toast } from '@/components/ui/use-toast';
 import { TestCase, TestPlan, TestStep, Requirement } from '@/types';
 import { ChevronDown, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react';
@@ -28,6 +28,8 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
   const [plans, setPlans] = useState<TestPlan[]>([]);
   const [requirements, setRequirements] = useState<Requirement[]>([]);
   const [requirementId, setRequirementId] = useState<string>('');
+  const [newRequirementTitle, setNewRequirementTitle] = useState<string>('');
+  const [reqMode, setReqMode] = useState<'create' | 'link'>('create');
   const [showAdvanced, setShowAdvanced] = useState(false);
   // Projeto selecionado localmente no modal (padrão: projeto atual)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(currentProject?.id || null);
@@ -201,9 +203,23 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
         ? await updateTestCase(initialData.id, payload)
         : await createTestCase(payload);
 
-      // Vincular ao requisito selecionado (apenas na criação ou se mudou)
-      if (requirementId && !initialData) {
-        try { await linkCaseToRequirement(user.id, requirementId, testCase.id); } catch {}
+      // Requisito: criar novo OU vincular existente
+      if (!initialData) {
+        if (reqMode === 'create' && newRequirementTitle.trim()) {
+          try {
+            const newReq = await createRequirement({
+              user_id: user.id,
+              project_id: selectedProjectId || (plans.find(p => p.id === formData.plan_id) as any)?.project_id || '',
+              title: newRequirementTitle.trim(),
+              description: `Criado a partir do caso de teste: ${testCase.title}`,
+              priority: 'medium',
+              status: 'open',
+            } as any);
+            await linkCaseToRequirement(user.id, newReq.id, testCase.id);
+          } catch {}
+        } else if (reqMode === 'link' && requirementId) {
+          try { await linkCaseToRequirement(user.id, requirementId, testCase.id); } catch {}
+        }
       }
 
       toast({
@@ -332,17 +348,40 @@ export const TestCaseForm = ({ onSuccess, onCancel, planId, initialData }: TestC
         </div>
       </div>
 
-      {/* Requisito (vínculo opcional) */}
+      {/* Requisito (criar novo ou vincular existente) */}
       {!initialData && (
         <div className="space-y-1.5">
-          <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Requisito vinculado <span className="normal-case font-normal">(opcional)</span></Label>
-          <SearchableCombobox
-            items={requirements.map(r => ({ value: r.id, label: `${r.sequence ? `REQ-${String(r.sequence).padStart(3,'0')} — ` : ''}${r.title}` }))}
-            value={requirementId}
-            onChange={(value) => setRequirementId(value || '')}
-            placeholder="Vincular a um requisito existente"
-            disabled={!selectedProjectId}
-          />
+          <div className="flex items-center justify-between">
+            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Requisito <span className="normal-case font-normal">(opcional)</span></Label>
+            <div className="flex rounded-md border border-border/60 overflow-hidden text-xs">
+              <button
+                type="button"
+                onClick={() => setReqMode('create')}
+                className={`px-2.5 py-1 transition-colors ${reqMode === 'create' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >Criar novo</button>
+              <button
+                type="button"
+                onClick={() => setReqMode('link')}
+                className={`px-2.5 py-1 transition-colors border-l border-border/60 ${reqMode === 'link' ? 'bg-brand text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >Vincular existente</button>
+            </div>
+          </div>
+          {reqMode === 'create' ? (
+            <Input
+              value={newRequirementTitle}
+              onChange={e => setNewRequirementTitle(e.target.value)}
+              placeholder="Título do novo requisito (deixe vazio para ignorar)"
+              className="h-9 bg-muted/30 border-border/60 focus:border-brand/50 focus:ring-0"
+            />
+          ) : (
+            <SearchableCombobox
+              items={requirements.map(r => ({ value: r.id, label: `${r.sequence ? `REQ-${String(r.sequence).padStart(3,'0')} — ` : ''}${r.title}` }))}
+              value={requirementId}
+              onChange={(value) => setRequirementId(value || '')}
+              placeholder="Selecione um requisito existente"
+              disabled={!selectedProjectId}
+            />
+          )}
         </div>
       )}
 

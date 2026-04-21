@@ -21,6 +21,7 @@ export interface TestPlan {
   updated_at: Date;
   user_id: string;
   generated_by_ai: boolean;
+  branches?: string;
   // Número sequencial opcional para exibição amigável (preenchido via migração)
   sequence?: number;
 }

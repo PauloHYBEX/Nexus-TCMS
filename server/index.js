@@ -209,6 +209,7 @@ function filterToTableCols(table, obj) {
     'ALTER TABLE activity_logs ADD COLUMN context TEXT',
     'ALTER TABLE activity_logs ADD COLUMN metadata TEXT DEFAULT \'{}\'',
     'ALTER TABLE projects ADD COLUMN icon TEXT DEFAULT \'\'',
+    'ALTER TABLE test_plans ADD COLUMN branches TEXT DEFAULT \'\'',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }

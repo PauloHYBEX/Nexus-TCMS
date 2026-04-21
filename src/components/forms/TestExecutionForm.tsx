@@ -280,10 +280,10 @@ export const TestExecutionForm = ({ onSuccess, onCancel, caseId, planId, executi
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="passed">✅ Aprovado</SelectItem>
-            <SelectItem value="failed">❌ Reprovado</SelectItem>
-            <SelectItem value="blocked">🚫 Bloqueado</SelectItem>
-            <SelectItem value="not_tested">⬜ Não Testado</SelectItem>
+            <SelectItem value="passed">Aprovado</SelectItem>
+            <SelectItem value="failed">Reprovado</SelectItem>
+            <SelectItem value="blocked">Bloqueado</SelectItem>
+            <SelectItem value="not_tested">Não Testado</SelectItem>
           </SelectContent>
         </Select>
       </div>
