@@ -231,7 +231,6 @@ const defaultConfig: AIModelConfig = {
           "scope": "<Escopo detalhado: liste cada funcionalidade/entrega como item de lista usando o caractere *>",
           "approach": "<Abordagem/metodologia: liste cada tipo de teste como item de lista usando o caractere *>",
           "criteria": "<Critérios de entrada e saída: liste cada critério como item de lista usando o caractere *>",
-          "resources": "<Recursos humanos e ferramentas: descreva a equipe e ferramentas necessárias em texto corrido ou lista com *. NÃO coloque nomes de branches aqui.>",
           "schedule": "<Cronograma e marcos principais da sprint em português>",
           "risks": "<Riscos potenciais e suas mitigações: liste cada risco como item de lista usando o caractere *>",
           "branches": "<CAMPO CRÍTICO — Liste APENAS os nomes das branches de código-fonte encontrados no documento (ex: sprint_16_06_login, feature/checkout, hotfix/fix-bug). Use o formato EXATO:\nFront-end:\n* sprint_xx_nome_branch\n* hotfix/nome-fix\nBack-end:\n* sprint_xx_nome_branch\nSe Front/Back não estiver indicado no documento, use um único grupo 'Geral:'. REGRAS ABSOLUTAS: (1) Use APENAS nomes de branches reais (snake_case, kebab-case, ou com /). (2) NÃO coloque frases, descrições ou markdown. (3) NUNCA deixe vazio — se não achar branches, liste as funcionalidades no padrão feature/nome-funcionalidade.>"

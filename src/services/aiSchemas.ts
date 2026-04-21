@@ -29,7 +29,7 @@ export const TestPlanV1 = z.object({
   scope: z.preprocess(toStr, z.string().min(1)),
   approach: z.preprocess(toStr, z.string().min(1)),
   criteria: z.preprocess(toStr, z.string().min(1)),
-  resources: z.preprocess(toStr, z.string().min(1)),
+  resources: z.preprocess(toStr, z.string().default('')).optional(),
   schedule: z.preprocess(toStr, z.string().min(1)),
   risks: z.preprocess(toStr, z.string().min(1)),
   branches: z.preprocess(toStr, z.string().default('')).optional(),

@@ -766,31 +766,28 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             const allBranchGroups = branchGroups.length > 0 ? branchGroups : legacyBranchGroups;
             const totalBranches = allBranchGroups.reduce((acc, g) => acc + g.items.length, 0);
 
-            if (!obj && !scope && !approach && !criteria && !resources && !schedule && !risks && allBranchGroups.length === 0) return null;
+            if (!obj && !scope && !approach && !criteria && !schedule && !risks && allBranchGroups.length === 0) return null;
 
+            // Ordenar campos por tamanho (curtos primeiro) para masonry natural
             const gridItems: { label: string; content: string }[] = [
               obj      ? { label: 'Objetivo',   content: obj }      : null,
-              scope    ? { label: 'Escopo',     content: scope }    : null,
               approach ? { label: 'Abordagem',  content: approach } : null,
-              criteria ? { label: 'Critérios',  content: criteria } : null,
               schedule ? { label: 'Cronograma', content: schedule } : null,
+              scope    ? { label: 'Escopo',     content: scope }    : null,
+              criteria ? { label: 'Critérios',  content: criteria } : null,
               risks    ? { label: 'Riscos',     content: risks }    : null,
-              (resources && allBranchGroups.length === 0) ? { label: 'Recursos', content: resources } : null,
             ].filter(Boolean) as { label: string; content: string }[];
 
             return (
               <>
                 {gridItems.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                    {gridItems.map((field, idx) => {
-                      const spanFull = (idx === gridItems.length - 1) && (gridItems.length % 2 !== 0);
-                      return (
-                        <div key={field.label} className={`self-start${spanFull ? ' md:col-span-2' : ''}`}>
-                          <h3 className="text-sm font-semibold text-foreground mb-1.5">{field.label}</h3>
-                          {renderListOrParagraph(field.content)}
-                        </div>
-                      );
-                    })}
+                  <div className="md:columns-2 md:gap-5 space-y-5 md:space-y-0">
+                    {gridItems.map((field) => (
+                      <div key={field.label} className="break-inside-avoid md:mb-5">
+                        <h3 className="text-sm font-semibold text-foreground mb-1.5">{field.label}</h3>
+                        {renderListOrParagraph(field.content)}
+                      </div>
+                    ))}
                   </div>
                 )}
                 {allBranchGroups.length > 0 && (
