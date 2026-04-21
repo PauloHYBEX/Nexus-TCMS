@@ -828,7 +828,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
           )}
 
           {/* Imagens de branches — apenas quando geração IA está disponível */}
-          {type === 'case' && !!onGenerate && (
+          {false && type === 'case' && (
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
