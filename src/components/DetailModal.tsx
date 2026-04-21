@@ -736,10 +736,12 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             const branchesRaw = ((item as any).branches?.toString().trim()) || '';
 
             const isBranchName = (s: string): boolean => {
-              if (!s || s.length > 80) return false;
-              if (/\*\*/.test(s)) return false;
-              if (/[.,:;!?]\s/.test(s)) return false;
-              return /^[\w\-\/\.]+$/.test(s);
+              if (!s || s.length > 100) return false;
+              if (/\*\*/.test(s)) return false; // rejeita markdown bold
+              if (/[.,:;!?]\s/.test(s)) return false; // rejeita frases
+              if (/\s{2,}/.test(s)) return false; // rejeita multiplos espacos
+              // Aceita: snake_case, kebab-case, feature/nome, com acentos e um unico espaco
+              return /^[\w\-\/\.\u00C0-\u017F]+(\s[\w\-\/\.\u00C0-\u017F]+)?$/.test(s);
             };
 
             const parseBranchGroups = (raw: string): { group: string; items: string[] }[] => {

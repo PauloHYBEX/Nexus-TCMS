@@ -227,12 +227,20 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
         const payload = (typeof result === 'object' && result !== null) ? (result as any) : {};
 
         if (formData.type === 'plan') {
+          // Debug: mostra o que a IA retornou (campo branches em especial)
+          console.log('[AI Plan] payload recebido:', {
+            title: payload?.title,
+            branches: payload?.branches,
+            hasBranches: !!payload?.branches,
+            keys: Object.keys(payload || {}),
+          });
           const newPlan = await createTestPlan({
             ...payload,
             user_id: user.id,
             project_id: currentProject.id,
             generated_by_ai: true
           });
+          console.log('[AI Plan] plano salvo no DB:', { id: newPlan.id, branches: (newPlan as any).branches });
           results.push({ ...newPlan, type: 'plan' });
         } else if (formData.type === 'case') {
           // Alguns templates podem retornar um array ou um objeto com `cases`

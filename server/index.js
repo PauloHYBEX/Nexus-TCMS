@@ -159,6 +159,9 @@ function serializeForDb(table, values) {
   if (table === 'profiles' && Array.isArray(values.tags)) {
     return { ...values, tags: JSON.stringify(values.tags) };
   }
+  if (table === 'activity_logs' && values.metadata && typeof values.metadata === 'object') {
+    return { ...values, metadata: JSON.stringify(values.metadata) };
+  }
   return values;
 }
 
