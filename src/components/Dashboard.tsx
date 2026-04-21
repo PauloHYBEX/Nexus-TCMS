@@ -189,12 +189,12 @@ export const Dashboard = () => {
         not_tested: executions.filter(e => e.status === 'not_tested').length,
       });
 
-      // ── Cobertura ──
+      // ── Cobertura ── (tabela requirements_cases com 's')
       const reqIds = requirements.map(r => r.id);
       let covered = 0;
       if (reqIds.length > 0) {
         const { data: links } = await supabase
-          .from('requirement_cases')
+          .from('requirements_cases')
           .select('requirement_id')
           .in('requirement_id', reqIds);
         covered = new Set((links ?? []).map((l: any) => l.requirement_id)).size;
@@ -232,7 +232,7 @@ export const Dashboard = () => {
         ...defects.map(d => ({ id: d.id, type: 'defect' as const, title: d.title, updated_at: d.updated_at, data: d })),
       ];
       allItems.sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime());
-      setRecentItems(allItems.slice(0, 7));
+      setRecentItems(allItems.slice(0, 6));
     } catch (e) {
       console.error('Dashboard load error:', e);
     } finally {
@@ -386,7 +386,7 @@ export const Dashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 min-h-0">
 
         {/* Progresso */}
-        <div className="lg:col-span-3 border border-border rounded-lg p-4 bg-card flex flex-col max-h-[calc(100vh-480px)] min-h-[180px]">
+        <div className="lg:col-span-3 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '320px' }}>
           <div className="flex items-center justify-between shrink-0 mb-3">
             <p className="text-sm font-semibold">Progresso por Plano</p>
             <button className="text-xs text-brand hover:underline flex items-center gap-0.5" onClick={() => navigate('/plans')}>
@@ -396,7 +396,7 @@ export const Dashboard = () => {
           {progressRows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">Nenhum plano com dados ainda.</p>
           ) : (
-            <div className="space-y-3 overflow-hidden flex-1">
+            <div className="space-y-3 overflow-hidden">
               {progressRows.map(row => (
                 <div
                   key={row.planId}
@@ -420,12 +420,12 @@ export const Dashboard = () => {
         </div>
 
         {/* Atividade Recente */}
-        <div className="lg:col-span-2 border border-border rounded-lg p-4 bg-card flex flex-col max-h-[calc(100vh-480px)] min-h-[180px]">
+        <div className="lg:col-span-2 border border-border rounded-lg p-4 bg-card flex flex-col" style={{ height: 'fit-content', maxHeight: '300px' }}>
           <p className="text-sm font-semibold mb-2 shrink-0">Atividade Recente</p>
           {recentItems.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">Nenhuma atividade recente.</p>
           ) : (
-            <div className="divide-y divide-border overflow-hidden flex-1">
+            <div className="divide-y divide-border overflow-hidden">
               {recentItems.map(item => {
                 const conf = TYPE_ICON_MAP[item.type];
                 const Icon = conf.icon;
