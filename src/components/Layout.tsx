@@ -65,7 +65,7 @@ export const Layout = ({ children }: LayoutProps) => {
           <Header />
           <main className={cn(
             "flex-1 overflow-x-hidden px-3 sm:px-5 lg:px-6 xl:px-8 py-4 sm:py-6",
-            location.pathname.startsWith('/history') ? 'overflow-hidden' : 'overflow-y-auto'
+            (location.pathname === '/' || location.pathname.startsWith('/history')) ? 'overflow-hidden' : 'overflow-y-auto'
           )}>
             {/* Breadcrumbs */}
             <div className="mb-4 sm:mb-6 text-sm text-muted-foreground flex items-center gap-2">

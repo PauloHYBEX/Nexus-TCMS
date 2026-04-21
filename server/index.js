@@ -184,6 +184,7 @@ function filterToTableCols(table, obj) {
 
 // Auto-migrate existing databases: add columns that may be missing
 {
+  _tableColsCache.clear(); // limpa antes de migrar
   const migrations = [
     'ALTER TABLE test_plans ADD COLUMN sequence INTEGER',
     'ALTER TABLE test_plans ADD COLUMN user_id TEXT',
@@ -213,6 +214,29 @@ function filterToTableCols(table, obj) {
     try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }
   }
   _tableColsCache.clear(); // invalida cache após migrações
+
+  // Verificar e criar tabelas que podem estar faltando
+  const extraTables = [
+    `CREATE TABLE IF NOT EXISTS requirements_cases (
+      id TEXT PRIMARY KEY,
+      requirement_id TEXT REFERENCES requirements(id) ON DELETE CASCADE,
+      case_id TEXT REFERENCES test_cases(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(requirement_id, case_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS role_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
+      requested_role TEXT NOT NULL,
+      status TEXT DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`,
+  ];
+  for (const sql of extraTables) {
+    try { db.exec(sql); } catch { /* already exists */ }
+  }
+  _tableColsCache.clear();
 }
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -326,11 +350,6 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
         const colSet = new Set();
         rows.forEach(row => Object.keys(row).forEach(k => colSet.add(k)));
         const cols = Array.from(colSet);
-        const params = [];
-        const tuples = rows.map((row) => {
-          const placeholders = cols.map((col) => { params.push(row[col] !== undefined ? row[col] : null); return '\$' + params.length; });
-          return '(' + placeholders.join(', ') + ')';
-        });
         const conflictCols = String(options?.onConflict || '').split(',').map((s) => s.trim()).filter(Boolean);
         const updateCols = cols.filter((c) => !conflictCols.includes(c));
         const onConflict = options?.onConflict
@@ -338,10 +357,17 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
               ? ' ON CONFLICT (' + conflictCols.join(', ') + ') DO UPDATE SET ' + updateCols.map((c) => c + ' = excluded.' + c).join(', ')
               : ' ON CONFLICT (' + conflictCols.join(', ') + ') DO NOTHING')
           : '';
-        result = client.query(
-          'INSERT INTO ' + table + ' (' + cols.join(', ') + ') VALUES ' + tuples.join(', ') + (action === 'upsert' ? onConflict : '') + ' RETURNING *',
-          params
-        );
+        // better-sqlite3: inserir cada row individualmente para evitar
+        // desalinhamento de parâmetros em batch com colunas heterogêneas
+        const allInserted = [];
+        for (const row of rows) {
+          const rowParams = [];
+          const placeholders = cols.map((col) => { rowParams.push(row[col] !== undefined ? row[col] : null); return '?' ; });
+          const sql = 'INSERT INTO ' + table + ' (' + cols.join(', ') + ') VALUES (' + placeholders.join(', ') + ')' + (action === 'upsert' ? onConflict : '') + ' RETURNING *';
+          const r = client.query(sql, rowParams);
+          allInserted.push(...(r.rows || []));
+        }
+        result = { rows: allInserted, rowCount: allInserted.length };
       } else if (action === 'update') {
         const allowed = getTableCols(table);
         const entries = Object.entries(serializeForDb(table, values) || {})
