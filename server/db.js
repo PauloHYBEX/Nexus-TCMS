@@ -33,13 +33,19 @@ export function query(sql, params = []) {
   const hasReturning = /RETURNING/i.test(converted);
   const isRead = /^\s*(SELECT|WITH)/i.test(converted);
   const stmt = db.prepare(converted);
-  const safe = coerceParams(params);
-  if (isRead || hasReturning) {
-    const rows = stmt.all(...safe);
-    return { rows, rowCount: rows.length };
+  const safe = coerceParams(Array.isArray(params) ? params : []);
+  try {
+    if (isRead || hasReturning) {
+      // better-sqlite3 aceita array diretamente quando passado como único argumento
+      const rows = safe.length === 0 ? stmt.all() : stmt.all(safe);
+      return { rows, rowCount: rows.length };
+    }
+    const result = safe.length === 0 ? stmt.run() : stmt.run(safe);
+    return { rows: [], rowCount: result.changes };
+  } catch (err) {
+    console.error('[db] query error\nSQL:', converted, '\nparams:', safe, '\nerr:', err.message);
+    throw err;
   }
-  const result = stmt.run(...safe);
-  return { rows: [], rowCount: result.changes };
 }
 
 export function getClient() {
