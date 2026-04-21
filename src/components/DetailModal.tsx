@@ -735,13 +735,13 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
             const risks     = (item as any).risks?.toString().trim();
             const branchesRaw = ((item as any).branches?.toString().trim()) || '';
 
+            // Testa se um token isolado parece nome de branch real
             const isBranchName = (s: string): boolean => {
-              if (!s || s.length > 100) return false;
-              if (/\*\*/.test(s)) return false; // rejeita markdown bold
-              if (/[.,:;!?]\s/.test(s)) return false; // rejeita frases
-              if (/\s{2,}/.test(s)) return false; // rejeita multiplos espacos
-              // Aceita: snake_case, kebab-case, feature/nome, com acentos e um unico espaco
-              return /^[\w\-\/\.\u00C0-\u017F]+(\s[\w\-\/\.\u00C0-\u017F]+)?$/.test(s);
+              if (!s || s.length > 100 || s.length < 3) return false;
+              if (/\*\*/.test(s)) return false; // markdown bold
+              if (/\s/.test(s)) return false;   // sem espacos — sempre token unico
+              // snake_case, kebab-case, slash, pontos, acentos
+              return /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
             };
 
             const parseBranchGroups = (raw: string): { group: string; items: string[] }[] => {
@@ -751,13 +751,19 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
               let current: { group: string; items: string[] } | null = null;
               const groupHeaderRex = /^([A-Za-zÀ-ú\s\-]+):$/;
               for (const line of lines) {
-                const cleaned = line.replace(/^[\*\-]\s*/, '').trim();
                 if (groupHeaderRex.test(line) && !line.startsWith('*') && !line.startsWith('-')) {
                   current = { group: line.replace(/:$/, '').trim(), items: [] };
                   groups.push(current);
-                } else if (isBranchName(cleaned)) {
-                  if (!current) { current = { group: 'Geral', items: [] }; groups.push(current); }
-                  current.items.push(cleaned);
+                  continue;
+                }
+                // Remove marcadores de lista e divide por espaco/virgula/ponto-e-virgula
+                const cleaned = line.replace(/^[\*\-\u2022]\s*/, '').trim();
+                const tokens = cleaned.split(/[\s,;]+/).map(t => t.trim()).filter(Boolean);
+                for (const tk of tokens) {
+                  if (isBranchName(tk)) {
+                    if (!current) { current = { group: 'Geral', items: [] }; groups.push(current); }
+                    if (!current.items.includes(tk)) current.items.push(tk);
+                  }
                 }
               }
               return groups.filter(g => g.items.length > 0);
@@ -807,9 +813,22 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                           )}
                           <div className="flex flex-wrap gap-1.5">
                             {group.items.map((b, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 px-2 py-0.5 text-xs font-mono text-brand">
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(b);
+                                    toast({ title: 'Branch copiada', description: b });
+                                  } catch {
+                                    toast({ title: 'Falha ao copiar', description: b, variant: 'destructive' });
+                                  }
+                                }}
+                                title={`Copiar ${b}`}
+                                className="inline-flex items-center gap-1 rounded-md bg-brand/10 border border-brand/20 hover:bg-brand/20 active:scale-95 transition px-2 py-0.5 text-xs font-mono text-brand cursor-pointer"
+                              >
                                 <span className="opacity-60">#</span>{b}
-                              </span>
+                              </button>
                             ))}
                           </div>
                         </div>
