@@ -9,7 +9,8 @@ import { Plus, PlayCircle, Edit, Trash2, Search, ArrowUpDown, ListFilter, Downlo
 import { StatusDot } from '@/components/ui/StatusDot';
 import { UserAvatar } from '@/components/ui/UserAvatar';
 import { useAuth } from '@/hooks/useAuth';
-import { getTestExecutions, getTestExecutionsByProject, getTestPlansByIds, getTestCasesByIds, deleteTestExecution, getDefects, createDefect } from '@/services/supabaseService';
+import { getTestExecutionsByProject, getTestPlansByIds, getTestCasesByIds, deleteTestExecution, getDefects, createDefect } from '@/services/supabaseService';
+import { supabase } from '@/integrations/supabase/client';
 import { TestExecution } from '@/types';
 import { TestExecutionForm } from '@/components/forms/TestExecutionForm';
 import { DetailModal } from '@/components/DetailModal';
@@ -87,6 +88,9 @@ export const TestExecutions = () => {
   const [bugDescription, setBugDescription] = useState('');
   const [bugSeverity, setBugSeverity] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
   const [deletingExecutionId, setDeletingExecutionId] = useState<string | null>(null);
+  const [bugStakeholder, setBugStakeholder] = useState<string>('');
+  const [projectUsers, setProjectUsers] = useState<Array<{ id: string; display_name: string | null; email: string }>>([]);  
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Tipagem e guarda para status
   const allowedStatuses = ['all', 'passed', 'failed', 'blocked', 'not_tested'] as const;
@@ -951,7 +955,20 @@ export const TestExecutions = () => {
       </Dialog>
 
       {/* Modal de Reportar Bug */}
-      <Dialog open={showReportBugModal} onOpenChange={setShowReportBugModal}>
+      <Dialog open={showReportBugModal} onOpenChange={(open) => {
+        setShowReportBugModal(open);
+        if (open && projectUsers.length === 0 && !loadingUsers) {
+          setLoadingUsers(true);
+          supabase.from('profiles' as any).select('id, display_name, email').eq('active', true)
+            .then(({ data }) => {
+              setProjectUsers((data || []) as Array<{ id: string; display_name: string | null; email: string }>);
+              setLoadingUsers(false);
+            });
+        }
+        if (!open) {
+          setBugStakeholder('');
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -983,6 +1000,24 @@ export const TestExecutions = () => {
                 placeholder="Detalhes do problema, passos para reproduzir, resultado esperado..."
                 className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Interessado</label>
+              <select
+                value={bugStakeholder}
+                onChange={(e) => setBugStakeholder(e.target.value)}
+                disabled={loadingUsers}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
+              >
+                <option value="">Selecionar interessado (opcional)</option>
+                {projectUsers
+                  .filter(u => u.id !== user?.id)
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name || u.email}
+                    </option>
+                  ))}
+              </select>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Severidade</label>
@@ -1025,14 +1060,26 @@ export const TestExecutions = () => {
                     execution_id: executionToReport.id,
                     user_id: user.id,
                   });
+                  if (bugStakeholder) {
+                    const reporterName = user.user_metadata?.full_name || user.email || 'Alguém';
+                    await supabase.from('notifications' as any).insert({
+                      id: crypto.randomUUID(),
+                      user_id: bugStakeholder,
+                      title: 'Novo defeito reportado',
+                      body: `${reporterName} reportou um defeito: "${bugTitle.trim()}" (${bugSeverity === 'critical' ? 'Crítica' : bugSeverity === 'high' ? 'Alta' : bugSeverity === 'medium' ? 'Média' : 'Baixa'}) vinculado ao caso ${caseLabel(executionToReport.case_id)}.`,
+                    });
+                  }
                   toast({
                     title: 'Defeito criado',
-                    description: 'O defeito foi reportado com sucesso e vinculado ao caso de teste.'
+                    description: bugStakeholder
+                      ? 'Defeito reportado e notificação enviada ao interessado.'
+                      : 'O defeito foi reportado com sucesso e vinculado ao caso de teste.',
                   });
                   setShowReportBugModal(false);
                   setBugTitle('');
                   setBugDescription('');
                   setBugSeverity('medium');
+                  setBugStakeholder('');
                   loadExecutions();
                 } catch (error: any) {
                   toast({
