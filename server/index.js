@@ -216,7 +216,12 @@ function filterToTableCols(table, obj) {
     'ALTER TABLE test_cases ADD COLUMN branches TEXT DEFAULT \'\'',
   ];
   for (const sql of migrations) {
-    try { db.exec(sql); } catch { /* column already exists — safe to ignore */ }
+    try { db.exec(sql); } catch (e) {
+      // Ignore 'duplicate column name' errors but log unexpected ones
+      if (!String(e?.message).includes('duplicate column') && !String(e?.message).includes('already exists')) {
+        console.warn('[migration skip]', String(e?.message).slice(0, 120), '|', sql.slice(0, 80));
+      }
+    }
   }
   _tableColsCache.clear(); // invalida cache após migrações
 
@@ -305,7 +310,18 @@ app.post('/api/db/query', requireUser, async (req, res, next) => {
       ? ' ORDER BY ' + order.column + (order.ascending === false ? ' DESC' : ' ASC')
       : '';
     const limitSql = Number.isFinite(limit) ? ' LIMIT ' + Number(limit) : '';
-    const selectSql = options?.head && options?.count ? 'COUNT(*) AS count' : (columns === '*' ? '*' : columns);
+    let selectSql;
+    if (options?.head && options?.count) {
+      selectSql = 'COUNT(*) AS count';
+    } else if (columns === '*') {
+      selectSql = '*';
+    } else {
+      // Filter requested columns to only those that exist in the table
+      const existingCols = getTableCols(table);
+      const requestedCols = columns.split(',').map(c => c.trim()).filter(c => /^[_a-zA-Z][_a-zA-Z0-9]*$/.test(c));
+      const safeCols = existingCols.size > 0 ? requestedCols.filter(c => existingCols.has(c)) : requestedCols;
+      selectSql = safeCols.length > 0 ? safeCols.join(', ') : '*';
+    }
     const result = query('SELECT ' + selectSql + ' FROM ' + table + whereSql + orderSql + limitSql, params);
     const rows = normalizeRows(table, result.rows);
     const count = options?.count ? (options.head ? (rows[0]?.count || 0) : rows.length) : null;

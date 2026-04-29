@@ -510,30 +510,68 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       if (branchImages.length > 0) parts.push(`Branches da sprint detectadas: ${branchImages.length} imagem(ns) anexadas (ver dados visuais).`);
 
       // Extrair branches reais do plano para direcionar os casos
+      // Fallback: se branches vazio, tenta extrair de resources (mesma logica do modal de exibicao)
       const planBranchesRaw = (plan as any).branches?.toString().trim() || '';
-      const branchLines = planBranchesRaw
-        .split('\n')
-        .map((l: string) => l.replace(/^[\*\-]\s*/, '').trim())
-        .filter((l: string) => l && /^[\w\-\/\.]+$/.test(l));
+      const planResourcesRaw = (plan as any).resources?.toString().trim() || '';
+      const sourceRaw = planBranchesRaw || planResourcesRaw;
 
-      // Fallback: extrair "sprint_DD_MM" do cronograma do plano
-      // Ex.: "início em 23/06/2025" -> "sprint_23_06"
-      const extractSprintFallback = (): string => {
-        const schedule = plan.schedule || plan.description || '';
-        const m = schedule.match(/(\d{1,2})[\/\-_](\d{1,2})/);
-        if (m) {
-          const dd = m[1].padStart(2, '0');
-          const mm = m[2].padStart(2, '0');
-          return `sprint_${dd}_${mm}`;
-        }
-        return '';
+      // Parser robusto: suporta grupos "Header:" e listas com marcadores
+      const isBranchToken = (s: string): boolean => {
+        if (!s || s.length > 100 || s.length < 3) return false;
+        if (/\*\*/.test(s)) return false;
+        if (/\s/.test(s)) return false;
+        return /^[\w\-\/\.\u00C0-\u017F]+$/.test(s);
       };
-      const sprintFallback = extractSprintFallback();
+      const lines = sourceRaw.split('\n').map(l => l.trim()).filter(Boolean);
+      const branchLines: string[] = [];
+      for (const line of lines) {
+        // Ignora headers de grupo tipo "Backend:"
+        if (/^([A-Za-zÀ-ú\s\-]+):$/.test(line)) continue;
+        // Remove marcadores e divide por delimitadores
+        const cleaned = line.replace(/^[\*\-\u2022]\s*/, '').trim();
+        const tokens = cleaned.split(/[\s,;]+/).map(t => t.trim()).filter(Boolean);
+        for (const tk of tokens) {
+          if (isBranchToken(tk) && !branchLines.includes(tk)) branchLines.push(tk);
+        }
+      }
+
+      // Extrair sprint label do plano para prefixar nos titulos (ex: Sprint_16_Jun/2025)
+      const MONTH_NAMES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const extractSprintLabel = (): { fallback: string; label: string } => {
+        // 1) Titulo do plano: "Sprint 16/06" ou "sprint_16_06"
+        const planTitle = plan.title || '';
+        const titleMatch = planTitle.match(/sprint[_\-]?(\d{1,2})[_\-\/]?(\d{1,2})(?:[_\-\/]?(\d{4}))?/i);
+        if (titleMatch) {
+          const dd = titleMatch[1].padStart(2, '0');
+          const mm = titleMatch[2].padStart(2, '0');
+          const yyyy = titleMatch[3] || new Date().getFullYear().toString();
+          const monthName = MONTH_NAMES_PT[parseInt(mm, 10) - 1] || mm;
+          return { fallback: `sprint_${dd}_${mm}`, label: `Sprint_${dd}_${monthName}/${yyyy}` };
+        }
+        // 2) Cronograma: primeira data DD/MM ou DD/MM/YYYY
+        const schedule = plan.schedule || plan.description || '';
+        const dates = Array.from(schedule.matchAll(/(\d{1,2})[\/](\d{1,2})(?:[\/](\d{4}))?/g));
+        if (dates.length > 0) {
+          const dd = (dates[0][1] as string).padStart(2, '0');
+          const mm = (dates[0][2] as string).padStart(2, '0');
+          const yyyy = (dates[0][3] as string | undefined) || new Date().getFullYear().toString();
+          const monthName = MONTH_NAMES_PT[parseInt(mm, 10) - 1] || mm;
+          return { fallback: `sprint_${dd}_${mm}`, label: `Sprint_${dd}_${monthName}/${yyyy}` };
+        }
+        return { fallback: '', label: '' };
+      };
+      const { fallback: sprintFallback, label: sprintLabel } = extractSprintLabel();
 
       const documentContent = parts.join('\n\n');
 
       const branchInstruction = branchLines.length > 0
-        ? `\n      BRANCHES DA SPRINT (CRÍTICO): Este plano cobre as seguintes branches: ${branchLines.join(', ')}.\n      - Crie EXATAMENTE um caso de teste para cada branch listada acima.\n      - O título de cada caso deve mencionar explicitamente o nome da branch ou funcionalidade correspondente.\n      - Não crie casos genéricos: cada caso deve ser específico para sua branch/funcionalidade.`
+        ? `
+      BRANCHES DA SPRINT (CRÍTICO): Este plano cobre as seguintes branches: ${branchLines.join(', ')}.
+      - Para cada branch, analise se há múltiplas funcionalidades, cenários ou testes necessários.
+      - Se uma branch tiver várias funcionalidades/testes, crie UM caso para CADA funcionalidade específica (pode haver múltiplos casos por branch).
+      - O campo "branch" deve conter APENAS o nome exato da branch (ex: hotfix/fix-editar-lancamento).
+      - O campo "title" deve descrever APENAS a funcionalidade testada, SEM incluir o nome da branch no título.
+      - Não crie casos genéricos: cada caso deve ser específico para sua funcionalidade/branch.`
         : '';
 
       const prompt = `
@@ -543,8 +581,10 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       ${documentContent}
 
       INSTRUÇÕES IMPORTANTES:
-      - Para cada branch ou funcionalidade, crie UM caso de teste específico e detalhado
-      - Seja DIRETO e ESPECÍFICO, o título do caso deve refletir a branch/funcionalidade
+      - Analise o documento e identifique TODAS as funcionalidades, cenários e variações de teste necessárias
+      - Uma mesma branch pode ter múltiplos casos se houver diferentes funcionalidades ou cenários de teste
+      - O campo "title" deve descrever APENAS a funcionalidade testada, sem mencionar o nome da branch
+      - O prefixo de sprint será adicionado automaticamente ao título — não o inclua
       - Cada caso deve ser independente e testável
       - Inclua passos de teste detalhados
 
@@ -635,9 +675,18 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
         const matchedBranch = matchBranchByTitle();
         const rrBranch = branchLines.length > 0 ? branchLines[idx % branchLines.length] : '';
         const caseBranch = iaBranch || matchedBranch || rrBranch || sprintFallback || '';
+        // Prefixar titulo com sprint label (ex: "Sprint_16_Jun/2025 — Validacao de Desconto")
+        const rawTitle = sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`);
+        // Remove o nome da branch do titulo se a IA o incluiu por engano
+        const titleWithoutBranch = caseBranch
+          ? rawTitle.replace(new RegExp(caseBranch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '').replace(/^[\s\-–—:]+|[\s\-–—:]+$/g, '').trim()
+          : rawTitle;
+        const finalTitle = sprintLabel
+          ? `${sprintLabel} — ${titleWithoutBranch || rawTitle}`
+          : titleWithoutBranch || rawTitle;
         return {
           plan_id: plan.id,
-          title: sanitizeText(typeof c?.title === 'string' ? c.title : c?.name || `Caso ${idx + 1}`),
+          title: finalTitle,
           description: sanitizeText(typeof c?.description === 'string' ? c.description : ''),
           preconditions: sanitizeText(typeof c?.preconditions === 'string' ? c.preconditions : ''),
           expected_result: sanitizeText(typeof c?.expected_result === 'string' ? c.expected_result : ''),
@@ -717,7 +766,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
 
   return (<>
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto scrollbar-auto-hide">
         <DialogTitle className="sr-only">{getTypeLabel()} — {getItemTitle()}</DialogTitle>
 
         {/* ── Header ── */}

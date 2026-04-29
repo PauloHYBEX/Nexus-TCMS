@@ -372,22 +372,24 @@ export const TestExecutions = () => {
   };
 
   const handleExecutionCreated = (execution: TestExecution) => {
-    setExecutions(prev => [execution, ...prev]);
     setShowForm(false);
     // Limpar modal da URL
     const params = new URLSearchParams(searchParams);
     params.delete('modal');
     setSearchParams(params);
+    // Recarregar lista completa para atualizar planMap e caseMap com a nova execução
+    loadExecutions();
   };
 
   const handleExecutionUpdated = (updated: TestExecution) => {
-    setExecutions(prev => prev.map(ex => (ex.id === updated.id ? updated : ex)));
     setShowEditForm(false);
     setSelectedExecution(updated);
     // Limpar modal da URL
     const params = new URLSearchParams(searchParams);
     params.delete('modal');
     setSearchParams(params);
+    // Recarregar lista completa para atualizar planMap e caseMap
+    loadExecutions();
   };
 
   const handleViewDetails = (execution: TestExecution) => {
@@ -510,7 +512,7 @@ export const TestExecutions = () => {
               Nova Execução
             </StandardButton>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-auto-hide">
             <DialogHeader>
               <DialogTitle>Nova Execução</DialogTitle>
               <DialogDescription>Preencha os dados da execução de teste</DialogDescription>
@@ -610,7 +612,7 @@ export const TestExecutions = () => {
         }
         setSearchParams(params);
       }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-auto-hide">
           <DialogHeader>
             <DialogTitle>
               {selectedExecution ? `Editar Execução #${selectedExecution.sequence ?? selectedExecution.id.slice(0, 8)}` : 'Editar Execução'}

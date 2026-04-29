@@ -633,7 +633,7 @@ export const TestCases = () => {
 
       {/* Modal de Criação/Edição */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-auto-hide">
           <DialogHeader>
             <DialogTitle>
               {editingCase ? 'Editar Caso de Teste' : 'Novo Caso de Teste'}

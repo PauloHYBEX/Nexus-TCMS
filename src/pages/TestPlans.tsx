@@ -856,7 +856,7 @@ export const TestPlans = () => {
         }
         setSearchParams(params);
       }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto scrollbar-auto-hide">
           <DialogHeader>
             <DialogTitle>
               {editingPlan ? `Editar Plano ${editingPlan.sequence ? `#${editingPlan.sequence}` : ''}` : 'Novo Plano de Teste'}
@@ -975,7 +975,7 @@ export const TestPlans = () => {
           setLinkedDetails(null);
         }
       }}>
-        <AlertDialogContent className="max-w-lg">
+        <AlertDialogContent className="max-w-lg scrollbar-auto-hide">
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir plano de teste?</AlertDialogTitle>
           </AlertDialogHeader>
