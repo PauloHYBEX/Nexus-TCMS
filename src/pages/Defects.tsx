@@ -209,7 +209,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const loadUsers = () => {
     if (projectUsers.length > 0 || loadingUsers) return;
     setLoadingUsers(true);
-    supabase.from('profiles' as any).select('id, display_name, email').eq('active', 1)
+    supabase.from('profiles' as any).select('id, display_name, email').order('display_name')
       .then(({ data }) => {
         setProjectUsers((data || []) as Array<{ id: string; display_name: string | null; email: string }>);
         setLoadingUsers(false);

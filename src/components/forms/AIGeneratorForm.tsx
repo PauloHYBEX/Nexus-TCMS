@@ -227,20 +227,41 @@ export const AIGeneratorForm = ({ onSuccess, initialType = 'plan' }: AIGenerator
         const payload = (typeof result === 'object' && result !== null) ? (result as any) : {};
 
         if (formData.type === 'plan') {
-          // Debug: mostra o que a IA retornou (campo branches em especial)
-          console.log('[AI Plan] payload recebido:', {
-            title: payload?.title,
-            branches: payload?.branches,
-            hasBranches: !!payload?.branches,
-            keys: Object.keys(payload || {}),
-          });
+          const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+          const formatPlanTitle = (): string => {
+            const src = [formData.requirements, formData.description, formData.context].join(' ');
+            // Padrão: Sprint DD/MM/YYYY, Sprint MM/YYYY, Sprint N — Jun/2025, mês por extenso
+            const byMonthName = src.match(/sprint[^\w]*(\d{1,2})[^\w\/]*(?:de\s+)?([A-Za-zÀ-ú]+)\/?(\d{4})?/i);
+            if (byMonthName) {
+              const monthName = byMonthName[2].charAt(0).toUpperCase() + byMonthName[2].slice(1).toLowerCase();
+              const year = byMonthName[3] || new Date().getFullYear().toString();
+              return `Plano de Testes - Sprint ${monthName}/${year}`;
+            }
+            const bySlash = src.match(/sprint[^\d]*(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?/i);
+            if (bySlash) {
+              const mm = bySlash[2].padStart(2, '0');
+              const year = bySlash[3] || new Date().getFullYear().toString();
+              const monthName = MONTHS_PT[parseInt(mm, 10) - 1] || mm;
+              return `Plano de Testes - Sprint ${monthName}/${year}`;
+            }
+            const byDate = src.match(/(\d{1,2})[\/\-](\d{4})/);
+            if (byDate) {
+              const mm = byDate[1].padStart(2, '0');
+              const year = byDate[2];
+              const monthName = MONTHS_PT[parseInt(mm, 10) - 1] || mm;
+              return `Plano de Testes - Sprint ${monthName}/${year}`;
+            }
+            if (payload?.title) return payload.title as string;
+            const now = new Date();
+            return `Plano de Testes - Sprint ${MONTHS_PT[now.getMonth()]}/${now.getFullYear()}`;
+          };
           const newPlan = await createTestPlan({
             ...payload,
+            title: formatPlanTitle(),
             user_id: user.id,
             project_id: currentProject.id,
             generated_by_ai: true
           });
-          console.log('[AI Plan] plano salvo no DB:', { id: newPlan.id, branches: (newPlan as any).branches });
           results.push({ ...newPlan, type: 'plan' });
         } else if (formData.type === 'case') {
           // Alguns templates podem retornar um array ou um objeto com `cases`
