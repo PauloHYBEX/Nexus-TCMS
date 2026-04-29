@@ -5,6 +5,7 @@ import { Defect } from '@/types';
 import type { TestCase, TestExecution } from '@/types';
 
 import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import {
   getDefects,
   getDefectsByProject,
@@ -64,6 +65,9 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const [status, setStatus] = useState<Defect['status']>('open');
   const [caseId, setCaseId] = useState<string>('');
   const [executionId, setExecutionId] = useState<string>('');
+  const [stakeholder, setStakeholder] = useState<string>('');
+  const [projectUsers, setProjectUsers] = useState<Array<{ id: string; display_name: string | null; email: string }>>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const BASE_PATH = '/defects';
   
   // Constrói um conjunto seguro de query params permitido pela tela
@@ -161,6 +165,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const closeForm = () => {
     setShowForm(false);
     setEditing(null);
+    setStakeholder('');
     clearIdParam();
   };
 
@@ -201,6 +206,16 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     }
   };
 
+  const loadUsers = () => {
+    if (projectUsers.length > 0 || loadingUsers) return;
+    setLoadingUsers(true);
+    supabase.from('profiles' as any).select('id, display_name, email').eq('active', 1)
+      .then(({ data }) => {
+        setProjectUsers((data || []) as Array<{ id: string; display_name: string | null; email: string }>);
+        setLoadingUsers(false);
+      });
+  };
+
   const openCreate = () => {
     setEditing(null);
     setTitle('');
@@ -209,7 +224,9 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     setStatus('open');
     setCaseId('');
     setExecutionId('');
+    setStakeholder('');
     setCaseExecutions([]);
+    loadUsers();
     setShowForm(true);
     clearIdParam();
   };
@@ -222,6 +239,8 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     setStatus(d.status);
     setCaseId(d.case_id || '');
     setExecutionId(d.execution_id || '');
+    setStakeholder('');
+    loadUsers();
     setShowForm(true);
     const params = buildSafeSearchParams(location.search);
     params.set('id', d.id);
@@ -268,7 +287,17 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
         }
         const created = await createDefect({ user_id: user.id, project_id: currentProject.id, title, description, severity, status, case_id: caseId || null, execution_id: executionId || null });
         setDefects(prev => [created, ...prev]);
-        toast({ title: 'Criado', description: 'Defeito criado com sucesso.' });
+        if (stakeholder) {
+          const reporterName = (user as any).user_metadata?.full_name || (user as any).email || 'Alguém';
+          const sevLabel = severity === 'critical' ? 'Crítica' : severity === 'high' ? 'Alta' : severity === 'medium' ? 'Média' : 'Baixa';
+          await supabase.from('notifications' as any).insert({
+            id: crypto.randomUUID(),
+            user_id: stakeholder,
+            title: 'Novo defeito reportado',
+            body: `${reporterName} reportou um defeito: "${title.trim()}" (${sevLabel}).`,
+          });
+        }
+        toast({ title: 'Criado', description: stakeholder ? 'Defeito criado e notificação enviada ao interessado.' : 'Defeito criado com sucesso.' });
       }
       closeForm();
     } catch (e: any) {
@@ -396,6 +425,24 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                   placeholder="Selecione"
                 />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Interessado <span className="normal-case font-normal">(opcional)</span></label>
+              <select
+                value={stakeholder}
+                onChange={(e) => setStakeholder(e.target.value)}
+                disabled={loadingUsers}
+                className="w-full rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm text-foreground focus:outline-none focus:border-brand/50"
+              >
+                <option value="">Selecionar interessado (opcional)</option>
+                {projectUsers
+                  .filter(u => u.id !== user?.id)
+                  .map(u => (
+                    <option key={u.id} value={u.id}>
+                      {u.display_name || u.email}
+                    </option>
+                  ))}
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

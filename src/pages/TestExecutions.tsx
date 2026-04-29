@@ -959,7 +959,7 @@ export const TestExecutions = () => {
         setShowReportBugModal(open);
         if (open && projectUsers.length === 0 && !loadingUsers) {
           setLoadingUsers(true);
-          supabase.from('profiles' as any).select('id, display_name, email').eq('active', true)
+          supabase.from('profiles' as any).select('id, display_name, email').eq('active', 1)
             .then(({ data }) => {
               setProjectUsers((data || []) as Array<{ id: string; display_name: string | null; email: string }>);
               setLoadingUsers(false);
