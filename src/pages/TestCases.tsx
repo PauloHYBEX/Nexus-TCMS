@@ -69,7 +69,7 @@ export const TestCases = () => {
   const [pageSize, setPageSize] = useState<number>(9);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'title' | 'created_at' | 'updated_at' | 'priority'>('created_at');
+  const [sortBy, setSortBy] = useState<'sequence' | 'created_at'>('sequence');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [q, setQ] = useState('');
   const [dateStart, setDateStart] = useState<string>('');
@@ -176,26 +176,15 @@ export const TestCases = () => {
     // Ordenação
     filtered.sort((a, b) => {
       let comparison = 0;
-      
       switch (sortBy) {
-        case 'title':
-          comparison = a.title.localeCompare(b.title);
+        case 'sequence':
+          comparison = (a.sequence || 0) - (b.sequence || 0);
           break;
         case 'created_at':
+        default:
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
-        case 'updated_at':
-          comparison = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
-          break;
-        case 'priority': {
-          const priorityOrder = { critical: 4, high: 3, medium: 2, low: 1 } as const;
-          const pa = priorityOrder[a.priority as keyof typeof priorityOrder] || 0;
-          const pb = priorityOrder[b.priority as keyof typeof priorityOrder] || 0;
-          comparison = pa - pb;
-          break;
-        }
       }
-      
       return sortOrder === 'asc' ? comparison : -comparison;
     });
 
@@ -380,11 +369,10 @@ export const TestCases = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>Mais recente</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>Mais antigo</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>Título (A-Z)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>Título (Z-A)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('priority'); setSortOrder('desc'); }}>Prioridade (Alta-Baixa)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('desc'); }}>ID (maior primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('asc'); }}>ID (menor primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('desc'); }}>Data (mais recente)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('asc'); }}>Data (mais antiga)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>

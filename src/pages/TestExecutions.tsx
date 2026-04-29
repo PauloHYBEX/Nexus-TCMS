@@ -61,7 +61,7 @@ export const TestExecutions = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<'all' | 'passed' | 'failed' | 'blocked' | 'not_tested'>('all');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'executed_at' | 'sequence' | 'status'>('executed_at');
+  const [sortBy, setSortBy] = useState<'executed_at' | 'sequence'>('sequence');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   // Paginação via hook
   const [page, setPage] = useState<number>(1);
@@ -199,16 +199,14 @@ export const TestExecutions = () => {
     const list = [...filteredExecutions];
     list.sort((a, b) => {
       let cmp = 0;
-      if (sortBy === 'executed_at') {
-        const aTime = a.executed_at ? new Date(a.executed_at).getTime() : 0;
-        const bTime = b.executed_at ? new Date(b.executed_at).getTime() : 0;
-        cmp = aTime - bTime;
-      } else if (sortBy === 'sequence') {
+      if (sortBy === 'sequence') {
         const aSeq = a.sequence ?? 0;
         const bSeq = b.sequence ?? 0;
         cmp = aSeq - bSeq;
-      } else if (sortBy === 'status') {
-        cmp = a.status.localeCompare(b.status);
+      } else if (sortBy === 'executed_at') {
+        const aTime = a.executed_at ? new Date(a.executed_at).getTime() : 0;
+        const bTime = b.executed_at ? new Date(b.executed_at).getTime() : 0;
+        cmp = aTime - bTime;
       }
       return sortDir === 'asc' ? cmp : -cmp;
     });
@@ -310,7 +308,7 @@ export const TestExecutions = () => {
 
   const handleSortChange = (value: string) => {
     // value format: `${by}:${dir}`
-    const [by, dir] = value.split(':') as ['executed_at' | 'sequence' | 'status', 'asc' | 'desc'];
+    const [by, dir] = value.split(':') as ['executed_at' | 'sequence', 'asc' | 'desc'];
     if (by) setSortBy(by);
     if (dir) setSortDir(dir);
   };
@@ -551,12 +549,10 @@ export const TestExecutions = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleSortChange('executed_at:desc')}>Mais recentes</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSortChange('executed_at:asc')}>Mais antigas</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSortChange('sequence:desc')}>Número (maior primeiro)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSortChange('sequence:asc')}>Número (menor primeiro)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSortChange('status:asc')}>Status (A→Z)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleSortChange('status:desc')}>Status (Z→A)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSortChange('sequence:desc')}>ID (maior primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSortChange('sequence:asc')}>ID (menor primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSortChange('executed_at:desc')}>Data (mais recente)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleSortChange('executed_at:asc')}>Data (mais antiga)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>

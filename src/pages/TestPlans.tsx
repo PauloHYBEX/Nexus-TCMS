@@ -61,7 +61,7 @@ export const TestPlans = () => {
     const savedMode = localStorage.getItem('testPlans_viewMode');
     return (savedMode as 'cards' | 'list') || 'list';
   });
-  const [sortBy, setSortBy] = useState<'title' | 'created_at' | 'updated_at' | 'sequence'>('updated_at');
+  const [sortBy, setSortBy] = useState<'sequence' | 'created_at'>('sequence');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [searchParams, setSearchParams] = useSearchParams();
   const [filterStatus, setFilterStatus] = useState<string | 'all'>('all');
@@ -228,22 +228,14 @@ export const TestPlans = () => {
       let aVal, bVal;
       
       switch (sortBy) {
-        case 'title':
-          aVal = a.title?.toLowerCase() || '';
-          bVal = b.title?.toLowerCase() || '';
-          break;
         case 'sequence':
           aVal = a.sequence || 0;
           bVal = b.sequence || 0;
           break;
         case 'created_at':
+        default:
           aVal = new Date(a.created_at).getTime();
           bVal = new Date(b.created_at).getTime();
-          break;
-        case 'updated_at':
-        default:
-          aVal = new Date(a.updated_at).getTime();
-          bVal = new Date(b.updated_at).getTime();
           break;
       }
       
@@ -574,10 +566,10 @@ export const TestPlans = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('desc'); }}>Mais recente</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('updated_at'); setSortOrder('asc'); }}>Mais antigo</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('asc'); }}>Título (A-Z)</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => { setSortBy('title'); setSortOrder('desc'); }}>Título (Z-A)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('desc'); }}>ID (maior primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('asc'); }}>ID (menor primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('desc'); }}>Data (mais recente)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('asc'); }}>Data (mais antiga)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>

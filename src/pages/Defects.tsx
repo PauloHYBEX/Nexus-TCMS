@@ -21,7 +21,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { StandardButton } from '@/components/StandardButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Bug as BugIcon, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bug as BugIcon, Search, ArrowUpDown } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { severityLabel, severityBadgeClass, defectStatusBadgeClass, defectStatusLabel } from '@/lib/labels';
 import { PriorityTag } from '@/components/ui/PriorityTag';
 import { StatusDot } from '@/components/ui/StatusDot';
@@ -54,6 +55,8 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     return (saved as 'cards' | 'list') || 'list';
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState<'sequence' | 'created_at'>('sequence');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [filterCaseIds, setFilterCaseIds] = useState<string[]>([]);
   const [selectedDefect, setSelectedDefect] = useState<Defect | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
@@ -326,13 +329,21 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
       }
       return true;
     });
-    if (!q) return base;
-    return base.filter(d =>
+    const searched = !q ? base : base.filter(d =>
       (d.title || '').toLowerCase().includes(q) ||
       (d.description || '').toLowerCase().includes(q) ||
       (d.id || '').toLowerCase().includes(q)
     );
-  }, [defects, searchTerm, filterCaseIds, executionCaseMap]);
+    return [...searched].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === 'sequence') {
+        cmp = (a.sequence || 0) - (b.sequence || 0);
+      } else {
+        cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      }
+      return sortOrder === 'asc' ? cmp : -cmp;
+    });
+  }, [defects, searchTerm, filterCaseIds, executionCaseMap, sortBy, sortOrder]);
 
   if (loading) {
     return (
@@ -388,6 +399,20 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
           {!embedded && (
             <ViewModeToggle viewMode={viewMode} onViewModeChange={setViewMode} />
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-9 gap-1.5 px-3 border border-border/60 hover:border-border font-normal">
+                <ArrowUpDown className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline text-sm">Ordenar</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('desc'); }}>ID (maior primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('sequence'); setSortOrder('asc'); }}>ID (menor primeiro)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('desc'); }}>Data (mais recente)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => { setSortBy('created_at'); setSortOrder('asc'); }}>Data (mais antiga)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
