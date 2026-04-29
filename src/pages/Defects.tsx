@@ -395,7 +395,15 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
       <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) closeForm(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Defeito' : 'Novo Defeito'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <BugIcon className="h-5 w-5 text-destructive" />
+              {editing ? 'Editar Defeito' : 'Reportar Defeito'}
+            </DialogTitle>
+            {!editing && (
+              <DialogDescription className="text-center text-sm">
+                Este defeito será automaticamente vinculado na Matriz de Rastreabilidade.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <div className="space-y-4 pt-1">
             <div className="space-y-1.5">
@@ -406,25 +414,36 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
               <label htmlFor="defect-desc" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Descrição</label>
               <textarea id="defect-desc" name="defect-description" className="w-full rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm focus:outline-none focus:border-brand/50 resize-none" rows={3} placeholder="Descreva o defeito encontrado..." value={description} onChange={e => setDescription(e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Severidade</label>
-                <SearchableCombobox
-                  items={[{ value: 'low', label: 'Baixa' },{ value: 'medium', label: 'Média' },{ value: 'high', label: 'Alta' },{ value: 'critical', label: 'Crítica' }]}
-                  value={severity}
-                  onChange={(value) => { if (value) setSeverity(value as Defect['severity']); }}
-                  placeholder="Selecione"
-                />
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Severidade</label>
+              <div className="flex gap-2">
+                {(['low', 'medium', 'high', 'critical'] as const).map((sev) => (
+                  <button
+                    key={sev}
+                    type="button"
+                    onClick={() => setSeverity(sev)}
+                    className={`px-3 py-1.5 text-xs rounded-md border ${
+                      severity === sev
+                        ? 'bg-destructive text-destructive-foreground border-destructive'
+                        : 'bg-background text-foreground border-input hover:bg-muted'
+                    }`}
+                  >
+                    {sev === 'low' && 'Baixa'}
+                    {sev === 'medium' && 'Média'}
+                    {sev === 'high' && 'Alta'}
+                    {sev === 'critical' && 'Crítica'}
+                  </button>
+                ))}
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</label>
-                <SearchableCombobox
-                  items={[{ value: 'open', label: 'Aberto' },{ value: 'in_analysis', label: 'Em análise' },{ value: 'fixed', label: 'Corrigido' },{ value: 'validated', label: 'Validado' },{ value: 'closed', label: 'Fechado' }]}
-                  value={status}
-                  onChange={(value) => { if (value) setStatus(value as Defect['status']); }}
-                  placeholder="Selecione"
-                />
-              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</label>
+              <SearchableCombobox
+                items={[{ value: 'open', label: 'Aberto' },{ value: 'in_analysis', label: 'Em análise' },{ value: 'fixed', label: 'Corrigido' },{ value: 'validated', label: 'Validado' },{ value: 'closed', label: 'Fechado' }]}
+                value={status}
+                onChange={(value) => { if (value) setStatus(value as Defect['status']); }}
+                placeholder="Selecione"
+              />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Interessado <span className="normal-case font-normal">(opcional)</span></label>
