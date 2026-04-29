@@ -441,10 +441,10 @@ export const UserManagement = () => {
           ) : (
             <div className="border border-border rounded-lg overflow-hidden">
               {/* Header */}
-              <div className="grid grid-cols-[1fr_160px_auto] items-center px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="grid grid-cols-[1fr_160px_72px] items-center px-4 py-2.5 bg-muted/50 border-b border-border text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 <div>Usuário</div>
                 <div>Papel</div>
-                <div className="w-20 text-right">Ações</div>
+                <div className="text-right">Ações</div>
               </div>
 
               {/* Rows */}
@@ -457,7 +457,7 @@ export const UserManagement = () => {
                     <React.Fragment key={u.id}>
                       {/* Row */}
                       <div
-                        className="grid grid-cols-[1fr_160px_auto] items-center px-4 py-3 hover:bg-muted/20 transition-colors cursor-pointer"
+                        className="grid grid-cols-[1fr_160px_72px] items-center px-4 py-3 hover:bg-muted/20 transition-colors cursor-pointer"
                         onClick={() => setExpandedUser(prev => prev === u.id ? null : u.id)}
                       >
                         {/* User info */}
