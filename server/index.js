@@ -214,6 +214,7 @@ function filterToTableCols(table, obj) {
     'ALTER TABLE projects ADD COLUMN icon TEXT DEFAULT \'\'',
     'ALTER TABLE test_plans ADD COLUMN branches TEXT DEFAULT \'\'',
     'ALTER TABLE test_cases ADD COLUMN branches TEXT DEFAULT \'\'',
+    'ALTER TABLE notifications ADD COLUMN link TEXT DEFAULT \'\'',
   ];
   for (const sql of migrations) {
     try { db.exec(sql); } catch (e) {

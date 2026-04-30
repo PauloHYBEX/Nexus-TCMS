@@ -67,18 +67,16 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder="Pesquisar..." />
-          <CommandList>
+          <CommandList className="max-h-60 overflow-auto">
             <CommandEmpty>{emptyText}</CommandEmpty>
             <CommandGroup>
               {items.map((item) => (
-                <CommandItem key={item.value} value={item.label} onSelect={() => handleSelect(item.value)}>
-                  <Check className={cn('mr-2 h-4 w-4', item.value === value ? 'opacity-100' : 'opacity-0')} />
-                  <div className="flex flex-col">
-                    <span className="truncate">{item.label}</span>
-                    {item.hint && (
-                      <span className="text-xs text-muted-foreground truncate">{item.hint}</span>
-                    )}
-                  </div>
+                <CommandItem key={item.value} value={item.label} onSelect={() => handleSelect(item.value)} className="min-w-max whitespace-nowrap">
+                  <Check className={cn('mr-2 h-4 w-4 shrink-0', item.value === value ? 'opacity-100' : 'opacity-0')} />
+                  <span className="truncate">{item.label}</span>
+                  {item.hint && (
+                    <span className="ml-2 text-xs text-muted-foreground truncate">{item.hint}</span>
+                  )}
                 </CommandItem>
               ))}
             </CommandGroup>

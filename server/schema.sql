@@ -175,6 +175,7 @@ CREATE TABLE IF NOT EXISTS notifications (
   user_id TEXT REFERENCES profiles(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   body TEXT DEFAULT '',
+  link TEXT DEFAULT '',
   read_at TEXT,
   created_at TEXT DEFAULT (datetime('now'))
 );

@@ -94,6 +94,7 @@ export interface Defect {
   severity: 'low' | 'medium' | 'high' | 'critical';
   case_id?: string | null;
   execution_id?: string | null;
+  assigned_to?: string | null; // interessado/notificado sobre o defeito
   created_at: Date;
   updated_at: Date;
   sequence?: number;

@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { StandardButton } from '@/components/StandardButton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, Bug as BugIcon, Search, ArrowUpDown, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Bug as BugIcon, Search, ArrowUpDown } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { severityLabel, severityBadgeClass, defectStatusBadgeClass, defectStatusLabel } from '@/lib/labels';
 import { PriorityTag } from '@/components/ui/PriorityTag';
@@ -46,8 +46,6 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
   const [executionCaseMap, setExecutionCaseMap] = useState<Record<string, string>>({});
   const [projectCases, setProjectCases] = useState<TestCase[]>([]);
   const [caseExecutions, setCaseExecutions] = useState<TestExecution[]>([]);
-  const [caseSearchTerm, setCaseSearchTerm] = useState<string>('');
-  const [caseSearchActive, setCaseSearchActive] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Defect | null>(null);
@@ -248,7 +246,7 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
     setStatus(d.status);
     setCaseId(d.case_id || '');
     setExecutionId(d.execution_id || '');
-    setStakeholder('');
+    setStakeholder(d.assigned_to || '');
     loadUsers();
     setShowForm(true);
     const params = buildSafeSearchParams(location.search);
@@ -285,28 +283,43 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
           return;
         }
       }
+      const sendNotification = async (targetUserId: string, defectId: string, isUpdate = false) => {
+        const reporterName = (user as any).user_metadata?.full_name || (user as any).email || 'Alguém';
+        const sevLabel = severity === 'critical' ? 'Crítica' : severity === 'high' ? 'Alta' : severity === 'medium' ? 'Média' : 'Baixa';
+        await supabase.from('notifications' as any).insert({
+          id: crypto.randomUUID(),
+          user_id: targetUserId,
+          title: isUpdate ? 'Defeito atualizado - você é interessado' : 'Novo defeito reportado',
+          body: isUpdate
+            ? `${reporterName} atualizou um defeito onde você é interessado: "${title.trim()}" (${sevLabel}).`
+            : `${reporterName} reportou um defeito: "${title.trim()}" (${sevLabel}).`,
+          link: `/defects?id=${defectId}&modal=defect:view`,
+        });
+      };
+
       if (editing) {
-        const updated = await updateDefect(editing.id, { title, description, severity, status, case_id: caseId || null, execution_id: executionId || null });
+        const updated = await updateDefect(editing.id, { title, description, severity, status, case_id: caseId || null, execution_id: executionId || null, assigned_to: stakeholder || null });
         setDefects(prev => prev.map(r => r.id === updated.id ? updated : r));
-        toast({ title: 'Atualizado', description: 'Defeito atualizado com sucesso.' });
+        // Notificar ao salvar em modo edicao se stakeholder foi informado
+        if (stakeholder) {
+          await sendNotification(stakeholder, updated.id, true);
+          toast({ title: 'Atualizado', description: 'Defeito atualizado e notificação enviada ao interessado.' });
+        } else {
+          toast({ title: 'Atualizado', description: 'Defeito atualizado com sucesso.' });
+        }
       } else {
         if (!currentProject?.id) {
           toast({ title: 'Selecione um projeto', description: 'É necessário selecionar um projeto para criar defeitos.', variant: 'destructive' });
           return;
         }
-        const created = await createDefect({ user_id: user.id, project_id: currentProject.id, title, description, severity, status, case_id: caseId || null, execution_id: executionId || null });
+        const created = await createDefect({ user_id: user.id, project_id: currentProject.id, title, description, severity, status, case_id: caseId || null, execution_id: executionId || null, assigned_to: stakeholder || null });
         setDefects(prev => [created, ...prev]);
         if (stakeholder) {
-          const reporterName = (user as any).user_metadata?.full_name || (user as any).email || 'Alguém';
-          const sevLabel = severity === 'critical' ? 'Crítica' : severity === 'high' ? 'Alta' : severity === 'medium' ? 'Média' : 'Baixa';
-          await supabase.from('notifications' as any).insert({
-            id: crypto.randomUUID(),
-            user_id: stakeholder,
-            title: 'Novo defeito reportado',
-            body: `${reporterName} reportou um defeito: "${title.trim()}" (${sevLabel}).`,
-          });
+          await sendNotification(stakeholder, created.id, false);
+          toast({ title: 'Criado', description: stakeholder === user.id ? 'Defeito criado e você foi notificado como interessado.' : 'Defeito criado e notificação enviada ao interessado.' });
+        } else {
+          toast({ title: 'Criado', description: 'Defeito criado com sucesso.' });
         }
-        toast({ title: 'Criado', description: stakeholder ? 'Defeito criado e notificação enviada ao interessado.' : 'Defeito criado com sucesso.' });
       }
       closeForm();
     } catch (e: any) {
@@ -492,73 +505,44 @@ export const Defects = ({ embedded = false, preferredViewMode, onPreferredViewMo
                 ))}
               </select>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Caso relacionado <span className="normal-case font-normal">(opcional)</span></label>
-              <div className="flex gap-2">
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    placeholder="Buscar por ID (#123) ou título..."
-                    value={caseSearchTerm}
-                    onChange={(e) => setCaseSearchTerm(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setCaseSearchActive(true); }}
-                    className="w-full h-9 rounded-md border border-border/60 bg-muted/30 pl-3 pr-9 text-sm focus:outline-none focus:border-brand/50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setCaseSearchActive(!caseSearchActive)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-                  >
-                    <Search className="h-4 w-4" />
-                  </button>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Caso relacionado <span className="normal-case font-normal">(opcional)</span></label>
+                <SearchableCombobox
+                  items={[...projectCases]
+                    .sort((a, b) => (b.sequence || 0) - (a.sequence || 0))
+                    .slice(0, 50)
+                    .map(c => ({ value: c.id, label: `${c.sequence ? `#${c.sequence} ` : ''}${c.title}` }))}
+                  value={caseId}
+                  onChange={(value) => { 
+                    setCaseId(value || ''); 
+                    // Carregar execucoes do caso selecionado
+                    if (value && user) {
+                      getTestExecutions(user.id, undefined, value)
+                        .then(execList => {
+                          setCaseExecutions(execList.sort((a, b) => (b.sequence || 0) - (a.sequence || 0)));
+                        })
+                        .catch(() => setCaseExecutions([]));
+                    } else {
+                      setCaseExecutions([]);
+                    }
+                  }}
+                  placeholder="Selecione um caso"
+                />
               </div>
-              <SearchableCombobox
-                items={[...projectCases]
-                  .sort((a, b) => (b.sequence || 0) - (a.sequence || 0))
-                  .filter(c => {
-                    if (!caseSearchActive || !caseSearchTerm.trim()) return true;
-                    const term = caseSearchTerm.toLowerCase().trim();
-                    const idMatch = term.startsWith('#') ? String(c.sequence || '').includes(term.slice(1)) : String(c.sequence || '').includes(term);
-                    const titleMatch = c.title.toLowerCase().includes(term);
-                    return idMatch || titleMatch;
-                  })
-                  .slice(0, 50)
-                  .map(c => ({ value: c.id, label: `${c.sequence ? `#${c.sequence} ` : ''}${c.title}`, hint: c.id.slice(0, 8) }))}
-                value={caseId}
-                onChange={(value) => { 
-                  setCaseId(value || ''); 
-                  setCaseSearchActive(false);
-                  setCaseSearchTerm('');
-                  // Carregar execucoes do caso selecionado
-                  if (value && user) {
-                    getTestExecutions(user.id, undefined, value)
-                      .then(execList => {
-                        setCaseExecutions(execList.sort((a, b) => (b.sequence || 0) - (a.sequence || 0)));
-                      })
-                      .catch(() => setCaseExecutions([]));
-                  } else {
-                    setCaseExecutions([]);
-                  }
-                }}
-                placeholder="Selecione um caso"
-              />
-              <p className="text-xs text-muted-foreground">{caseSearchActive && caseSearchTerm ? `Filtrando: "${caseSearchTerm}"` : `Mostrando ${Math.min(projectCases.length, 50)} casos (ID maior primeiro)`}</p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Execução <span className="normal-case font-normal">(opcional)</span></label>
-              <SearchableCombobox
-                items={caseExecutions.map(e => ({ 
-                  value: e.id, 
-                  label: `EXEC-${e.sequence || e.id.slice(0, 6)} • ${new Date(e.executed_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}`,
-                  hint: `${e.status}${e.case_id ? ` • Caso #${projectCases.find(c => c.id === e.case_id)?.sequence || '?'} ${projectCases.find(c => c.id === e.case_id)?.title?.slice(0, 20) || ''}` : ''}`
-                }))}
-                value={executionId}
-                onChange={(value) => { setExecutionId(value || ''); }}
-                placeholder={caseId ? (caseExecutions.length === 0 ? 'Nenhuma execução para este caso' : `Selecione (${caseExecutions.length} disponíveis)`) : 'Selecione um caso primeiro'}
-                disabled={!caseId || caseExecutions.length === 0}
-              />
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Execução <span className="normal-case font-normal">(opcional)</span></label>
+                <SearchableCombobox
+                  items={caseExecutions.map(e => ({ 
+                    value: e.id, 
+                    label: `${e.sequence ? `EXEC-${e.sequence}` : 'Execução'} • ${new Date(e.executed_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })} • ${e.status}`
+                  }))}
+                  value={executionId}
+                  onChange={(value) => { setExecutionId(value || ''); }}
+                  placeholder={caseId ? (caseExecutions.length === 0 ? 'Nenhuma execução' : `Selecione (${caseExecutions.length})`) : 'Selecione um caso primeiro'}
+                  disabled={!caseId || caseExecutions.length === 0}
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
               <StandardButton variant="outline" onClick={closeForm}>Cancelar</StandardButton>

@@ -64,6 +64,7 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
   const [additionalContext, setAdditionalContext] = useState('');
   const [selectedModelId, setSelectedModelId] = useState<string>('default');
   const [author, setAuthor] = useState<{ id: string; email?: string; display_name?: string; avatar_url?: string; github_url?: string; google_url?: string; website_url?: string; tags?: any[]; role?: string } | null>(null);
+  const [executor, setExecutor] = useState<{ id: string; email?: string; display_name?: string } | null>(null);
   const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [authorTags, setAuthorTags] = useState<Array<{ label: string; icon?: string }>>([]);
   const [linkedPlan, setLinkedPlan] = useState<{ id: string; sequence?: number | null; title?: string } | null>(null);
@@ -129,14 +130,35 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
       });
   }, [isOpen, item, type]);
 
-  // Buscar contagem de defeitos para execuções
+  // Buscar contagem de defeitos para execuções (apenas desta execução específica)
   useEffect(() => {
     if (!isOpen || !item || type !== 'execution') return;
-    const caseId = (item as any).case_id as string | undefined;
-    if (!caseId) return;
-    supabase.from('defects').select('id', { count: 'exact', head: true })
-      .eq('case_id', caseId).neq('status', 'closed')
-      .then(({ count }) => setDefectCount(count || 0));
+    // Buscar defeitos vinculados à execução específica (não ao caso todo)
+    const execId = (item as any).id as string | undefined;
+    if (execId) {
+      supabase.from('defects').select('id', { count: 'exact', head: true })
+        .eq('execution_id', execId).neq('status', 'closed')
+        .then(({ count }) => setDefectCount(count || 0));
+    } else {
+      setDefectCount(0);
+    }
+  }, [isOpen, item, type]);
+
+  // Buscar perfil do executor para execuções
+  useEffect(() => {
+    if (!isOpen || !item || type !== 'execution') return;
+    const execItem = item as TestExecution;
+    const executorId = execItem.user_id || execItem.executed_by;
+    if (!executorId) {
+      setExecutor(null);
+      return;
+    }
+    supabase.from('profiles').select('id, email, display_name').eq('id', executorId).single()
+      .then(({ data }) => {
+        if (data) setExecutor(data as any);
+        else setExecutor(null);
+      })
+      .catch(() => setExecutor(null));
   }, [isOpen, item, type]);
 
   const handleBranchFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1038,10 +1060,12 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
                   {renderListOrParagraph(item.actual_result)}
                 </div>
               )}
-              {item.executed_by && (
+              {(executor || item.executed_by) && (
                 <div>
                   <h3 className="text-sm font-semibold text-foreground mb-1.5">Executado por</h3>
-                  <p className="text-sm text-muted-foreground">{item.executed_by}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {executor?.display_name || executor?.email || item.executed_by}
+                  </p>
                 </div>
               )}
             </div>

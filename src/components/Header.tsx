@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { Moon, Sun, Settings, User, LogOut, Shield, Info, Bell } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Moon, Sun, Settings, User, LogOut, Shield, Info, Bell, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import KrigzisLogo from '@/components/branding/KrigzisLogo';
 import { ProjectPicker } from '@/components/ProjectPicker';
 import { useTheme } from '@/hooks/useTheme';
@@ -28,7 +28,9 @@ export const Header = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [notifCount, setNotifCount] = useState(0);
-  const [notifs, setNotifs] = useState<Array<{ id: string; title: string; body: string | null; created_at: string; read_at: string | null }>>([]);
+  const [notifs, setNotifs] = useState<Array<{ id: string; title: string; body: string | null; link: string | null; created_at: string; read_at: string | null }>>([]);
+  const [showAllNotifs, setShowAllNotifs] = useState(false);
+  const navigate = useNavigate();
 
   const SINGLE_TENANT = String((import.meta as any).env?.VITE_SINGLE_TENANT ?? 'true') === 'true';
 
@@ -48,13 +50,13 @@ export const Header = () => {
     let channel: any = null;
 
     const fetchNotifs = async () => {
-      // Lista últimas 10
+      // Lista todas para controle local (limitamos na UI)
       const { data } = await supabase
         .from('notifications' as any)
-        .select('id, title, body, created_at, read_at')
+        .select('id, title, body, link, created_at, read_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(50);
       if (data) setNotifs(data as any);
 
       // Contagem não lidas
@@ -85,7 +87,7 @@ export const Header = () => {
     };
   }, [user, SINGLE_TENANT]);
 
-  const markAsRead = async (id: string) => {
+  const markAsRead = async (id: string, shouldNavigate = false, link?: string | null) => {
     if (!user || SINGLE_TENANT) return;
     const { error } = await supabase
       .from('notifications' as any)
@@ -95,6 +97,26 @@ export const Header = () => {
     if (!error) {
       setNotifs((prev) => prev.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n));
       setNotifCount((c) => Math.max(0, c - 1));
+      if (shouldNavigate && link) {
+        navigate(link);
+      }
+    }
+  };
+
+  const markAllAsRead = async () => {
+    if (!user || SINGLE_TENANT) return;
+    const unreadIds = notifs.filter(n => !n.read_at).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    
+    const { error } = await supabase
+      .from('notifications' as any)
+      .update({ read_at: new Date().toISOString() })
+      .in('id', unreadIds)
+      .eq('user_id', user.id);
+    
+    if (!error) {
+      setNotifs((prev) => prev.map(n => unreadIds.includes(n.id) ? { ...n, read_at: new Date().toISOString() } : n));
+      setNotifCount(0);
     }
   };
 
@@ -142,26 +164,60 @@ export const Header = () => {
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-72">
-                <DropdownMenuLabel>Notificações</DropdownMenuLabel>
-                <DropdownMenuSeparator />
+              <DropdownMenuContent align="end" className="w-80">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+                  <span className="text-sm font-semibold">Notificações</span>
+                  {notifCount > 0 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); markAllAsRead(); }}
+                      className="text-xs text-brand hover:text-brand/80 flex items-center gap-1"
+                    >
+                      <Check className="h-3 w-3" />
+                      Marcar todas como lidas
+                    </button>
+                  )}
+                </div>
                 {SINGLE_TENANT ? (
                   <div className="text-sm text-muted-foreground p-3">Modo single-tenant: notificações desativadas.</div>
                 ) : notifs.length === 0 ? (
                   <div className="text-sm text-muted-foreground p-3">Nenhuma notificação no momento.</div>
                 ) : (
-                  <div className="max-h-80 overflow-auto py-1">
-                    {notifs.map((n) => (
+                  <div className="max-h-96 overflow-auto">
+                    {(showAllNotifs ? notifs : notifs.slice(0, 3)).map((n) => (
                       <div
                         key={n.id}
-                        className={`px-3 py-2 text-sm cursor-pointer hover:bg-accent ${n.read_at ? 'opacity-80' : 'font-medium'}`}
-                        onClick={() => markAsRead(n.id)}
+                        className={`group relative px-3 py-3 text-sm cursor-pointer border-b border-border/50 last:border-0 ${n.read_at ? 'opacity-70 bg-muted/30' : 'bg-background font-medium'} hover:bg-accent/50 transition-colors`}
+                        onClick={() => markAsRead(n.id, true, n.link)}
                       >
-                        <div className="truncate">{n.title}</div>
-                        {n.body && <div className="text-xs text-muted-foreground truncate">{n.body}</div>}
-                        <div className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleString()}</div>
+                        <div className="flex items-start gap-2">
+                          {!n.read_at && <span className="mt-1.5 w-2 h-2 rounded-full bg-brand shrink-0" />}
+                          <div className="flex-1 min-w-0">
+                            <div className="truncate font-medium">{n.title}</div>
+                            {n.body && <div className="text-xs text-muted-foreground line-clamp-2">{n.body}</div>}
+                            <div className="text-[10px] text-muted-foreground mt-1">{new Date(n.created_at).toLocaleString('pt-BR')}</div>
+                          </div>
+                        </div>
+                        {n.link && (
+                          <div className="absolute inset-0 bg-brand/0 group-hover:bg-brand/5 transition-colors pointer-events-none flex items-center justify-center">
+                            <span className="opacity-0 group-hover:opacity-100 bg-background/90 text-xs px-2 py-1 rounded shadow-sm border border-border transition-opacity">
+                              Clique para redirecionar
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
+                    {notifs.length > 3 && (
+                      <button
+                        onClick={() => setShowAllNotifs(!showAllNotifs)}
+                        className="w-full py-2 text-xs text-center text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+                      >
+                        {showAllNotifs ? (
+                          <><ChevronUp className="h-3 w-3" /> Mostrar apenas últimas 3</>
+                        ) : (
+                          <><ChevronDown className="h-3 w-3" /> Carregar todas ({notifs.length})</>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </DropdownMenuContent>
