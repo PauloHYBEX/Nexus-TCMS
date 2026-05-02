@@ -798,10 +798,10 @@ export const DetailModal = ({ isOpen, onClose, item, type, onEdit, onDelete }: D
               {getTypeLabel()} — {getItemTitle()}
             </h2>
             {type === 'execution' && defectCount > 0 && (
-              <span className="inline-flex items-center gap-1 text-destructive text-xs font-semibold shrink-0" title={`${defectCount} defeito(s) aberto(s)`}>
-                <BugIcon className="h-4 w-4" />
-                {defectCount}
-              </span>
+              <Badge className="bg-destructive text-destructive-foreground hover:bg-destructive/90 shrink-0 cursor-pointer" title={`${defectCount} defeito(s) aberto(s) vinculado(s) à execução`}>
+                <BugIcon className="h-3.5 w-3.5 mr-1" />
+                {defectCount} {defectCount === 1 ? 'defeito' : 'defeitos'}
+              </Badge>
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-2">

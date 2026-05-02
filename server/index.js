@@ -22,15 +22,94 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 const uploadsDir = path.join(rootDir, 'public', 'uploads');
-const JWT_SECRET = process.env.LOCAL_AUTH_SECRET || 'nexus-local-secret';
+
+// Validação do segredo JWT — obrigatório e forte em producao
+const IS_PROD = process.env.NODE_ENV === 'production';
+const RAW_SECRET = process.env.LOCAL_AUTH_SECRET;
+const MIN_SECRET_LEN = 32;
+const WEAK_SECRETS = new Set(['nexus-local-secret', 'change-me', 'secret', 'changeme']);
+
+if (!RAW_SECRET) {
+  if (IS_PROD) {
+    console.error('[security] LOCAL_AUTH_SECRET nao definido. Abortando em producao.');
+    process.exit(1);
+  } else {
+    console.warn('[security] LOCAL_AUTH_SECRET nao definido. Usando segredo de desenvolvimento temporario.');
+  }
+} else if (RAW_SECRET.length < MIN_SECRET_LEN || WEAK_SECRETS.has(RAW_SECRET)) {
+  if (IS_PROD) {
+    console.error('[security] LOCAL_AUTH_SECRET fraco (<' + MIN_SECRET_LEN + ' chars ou padrao conhecido). Abortando.');
+    process.exit(1);
+  } else {
+    console.warn('[security] LOCAL_AUTH_SECRET fraco. Gere um novo com: openssl rand -hex 32');
+  }
+}
+
+const JWT_SECRET = RAW_SECRET || ('dev-only-' + Math.random().toString(36).slice(2));
 const PORT = Number(process.env.API_PORT || 4000);
 
 await fs.mkdir(uploadsDir, { recursive: true });
 
 const app = express();
-app.use(cors({ origin: true, credentials: true }));
+
+// CORS com allowlist configuravel via ALLOWED_ORIGINS (separadas por virgula)
+const DEFAULT_ORIGINS = ['http://localhost:8080', 'http://localhost:5173', 'http://127.0.0.1:8080'];
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || DEFAULT_ORIGINS.join(','))
+  .split(',').map((o) => o.trim()).filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Permite requisicoes sem Origin (curl, same-origin, ferramentas internas)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) {
+      return callback(null, true);
+    }
+    return callback(new Error('Origem nao permitida pelo CORS: ' + origin));
+  },
+  credentials: true,
+}));
+
+// Headers de seguranca basicos (sem dependencia externa)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-XSS-Protection', '0');
+  next();
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(uploadsDir));
+
+// Rate limit simples em memoria para rotas de autenticacao
+const authAttempts = new Map(); // key: ip, value: { count, resetAt }
+const AUTH_LIMIT = Number(process.env.AUTH_RATE_LIMIT || 10);
+const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_WINDOW_MS || 15 * 60 * 1000);
+
+function authRateLimit(req, res, next) {
+  const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+  const now = Date.now();
+  const entry = authAttempts.get(ip);
+  if (!entry || entry.resetAt < now) {
+    authAttempts.set(ip, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+    return next();
+  }
+  entry.count += 1;
+  if (entry.count > AUTH_LIMIT) {
+    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+    res.setHeader('Retry-After', String(retryAfter));
+    return res.status(429).json({ error: { message: 'Muitas tentativas. Tente novamente em ' + retryAfter + 's.' } });
+  }
+  next();
+}
+
+// Limpeza periodica do mapa de tentativas
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of authAttempts.entries()) {
+    if (entry.resetAt < now) authAttempts.delete(ip);
+  }
+}, 5 * 60 * 1000).unref?.();
 
 const storage = multer.diskStorage({
   destination: async (_req, _file, cb) => cb(null, uploadsDir),
@@ -252,7 +331,7 @@ function filterToTableCols(table, obj) {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-app.post('/api/auth/login', async (req, res, next) => {
+app.post('/api/auth/login', authRateLimit, async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     const { rows } = query('SELECT * FROM profiles WHERE email = ? AND active = 1', [String(email || '').toLowerCase().trim()]);
@@ -265,7 +344,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post('/api/auth/register', async (req, res, next) => {
+app.post('/api/auth/register', authRateLimit, async (req, res, next) => {
   try {
     const { email, password, name } = req.body || {};
     const passwordHash = await bcrypt.hash(String(password || ''), 10);
@@ -289,7 +368,7 @@ app.get('/api/auth/session', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-app.post('/api/auth/reset-password', (_req, res) => {
+app.post('/api/auth/reset-password', authRateLimit, (_req, res) => {
   res.json({ ok: true, message: 'Recuperacao de senha nao suportada no modo local.' });
 });
 

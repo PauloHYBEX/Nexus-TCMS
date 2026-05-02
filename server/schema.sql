@@ -215,3 +215,7 @@ CREATE INDEX IF NOT EXISTS idx_requirements_project ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_defects_project ON defects(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
+
+-- Configurar realtime para notificacoes (Supabase realtime)
+-- Nota: Em SQLite local, o realtime eh simulado via polling no cliente
+-- Esta tabela precisa estar na publicacao supabase_realtime para funcionar em PostgreSQL
