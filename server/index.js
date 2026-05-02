@@ -11,6 +11,7 @@ import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { getClient, db, query } from './db.js';
 import { encrypt as encryptSecret, decrypt as decryptSecret } from './lib/crypto.js';
+import { validateRow, canTransitionDefect, canTransitionRequirement } from './lib/validation.js';
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
 import mammoth from 'mammoth';
@@ -450,6 +451,23 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
       if (action === 'insert' || action === 'upsert') {
         const rawRows = Array.isArray(values) ? values : [values];
         if (!rawRows.length) return res.json({ data: [], error: null });
+
+        // Validacao por linha (bloqueia em caso de payload invalido)
+        for (const r of rawRows) {
+          const err = validateRow(table, r, { isUpdate: false });
+          if (err) return res.status(400).json({ error: { message: `Validacao (${table}): ${err}` } });
+        }
+
+        // Notifications: exige user_id destino valido (cross-user e feature legitima).
+        // Log-trail via activity_logs cobre auditoria de quem criou.
+        if (table === 'notifications') {
+          for (const r of rawRows) {
+            if (!r.user_id || typeof r.user_id !== 'string' || r.user_id.length < 8) {
+              return res.status(400).json({ error: { message: 'Notificacao exige user_id valido.' } });
+            }
+          }
+        }
+
         let nextSeq = null; // inicializado na 1ª linha sem sequence para evitar duplicatas em lote
         const rows = rawRows.map((row) => {
           const r = serializeForDb(table, row);
@@ -505,6 +523,26 @@ app.post('/api/db/mutate', requireUser, async (req, res, next) => {
         }
         result = { rows: allInserted, rowCount: allInserted.length };
       } else if (action === 'update') {
+        // Validacao de payload (campos presentes)
+        const errV = validateRow(table, values, { isUpdate: true });
+        if (errV) return res.status(400).json({ error: { message: `Validacao (${table}): ${errV}` } });
+
+        // State machine: bloqueia transicoes invalidas em defects/requirements
+        if ((table === 'defects' || table === 'requirements') && values?.status) {
+          // Busca registro(s) afetado(s) para comparar status atual
+          const preParams = [];
+          const preWhere = buildWhere(filters, preParams);
+          const { rows: preRows } = query('SELECT id, status FROM ' + table + preWhere, preParams);
+          const checker = table === 'defects' ? canTransitionDefect : canTransitionRequirement;
+          for (const r of preRows) {
+            if (!checker(r.status, values.status)) {
+              return res.status(400).json({
+                error: { message: `Transicao invalida em ${table}: ${r.status} -> ${values.status}` },
+              });
+            }
+          }
+        }
+
         const allowed = getTableCols(table);
         const entries = Object.entries(serializeForDb(table, values) || {})
           .filter(([key]) => !allowed.size || allowed.has(key));
