@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
@@ -8,25 +8,29 @@ import { AuthProvider, useAuth } from '@/hooks/useAuth';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { ThemeProvider } from '@/hooks/useTheme';
 import { ProjectProvider } from '@/contexts/ProjectContext';
+
+// Paginas criticas (bundle inicial)
 import Index from '@/pages/Index';
-import { TestPlans } from '@/pages/TestPlans';
-import { TestCases } from '@/pages/TestCases';
-import { TestExecutions } from '@/pages/TestExecutions';
-import { AIGenerator } from '@/pages/AIGenerator';
-import { History } from '@/pages/History';
-import { Reports } from '@/pages/Reports';
-import { ModelControlPanel } from '@/pages/ModelControlPanel';
-import ProjectAdmin from '@/pages/ProjectAdmin';
-import { UserManagement } from '@/pages/UserManagement';
-import { About } from '@/pages/About';
-import NotFound from '@/pages/NotFound';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ResetPassword from '@/pages/ResetPassword';
-import { Requirements } from '@/pages/Requirements';
-import { Defects } from '@/pages/Defects';
-import { TraceabilityMatrix } from '@/pages/TraceabilityMatrix';
-import { Gestao } from '@/pages/Gestao';
+import NotFound from '@/pages/NotFound';
+
+// Paginas fluxo principal (carregadas sob demanda)
+const TestPlans = lazy(() => import('@/pages/TestPlans').then(m => ({ default: m.TestPlans })));
+const TestCases = lazy(() => import('@/pages/TestCases').then(m => ({ default: m.TestCases })));
+const TestExecutions = lazy(() => import('@/pages/TestExecutions').then(m => ({ default: m.TestExecutions })));
+const Gestao = lazy(() => import('@/pages/Gestao').then(m => ({ default: m.Gestao })));
+
+// Paginas pesadas/pouco frequentes (totalmente lazy)
+const AIGenerator = lazy(() => import('@/pages/AIGenerator').then(m => ({ default: m.AIGenerator })));
+const History = lazy(() => import('@/pages/History').then(m => ({ default: m.History })));
+const Reports = lazy(() => import('@/pages/Reports').then(m => ({ default: m.Reports })));
+const ModelControlPanel = lazy(() => import('@/pages/ModelControlPanel').then(m => ({ default: m.ModelControlPanel })));
+const ProjectAdmin = lazy(() => import('@/pages/ProjectAdmin'));
+const UserManagement = lazy(() => import('@/pages/UserManagement').then(m => ({ default: m.UserManagement })));
+const About = lazy(() => import('@/pages/About').then(m => ({ default: m.About })));
+
 import './App.css';
 
 const queryClient = new QueryClient();
@@ -45,7 +49,14 @@ function AppRouter() {
     );
   }
 
+  const suspenseFallback = (
+    <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="text-muted-foreground">Carregando página...</div>
+    </div>
+  );
+
   return (
+    <Suspense fallback={suspenseFallback}>
     <Routes>
       {/* Rotas públicas */}
       <Route path="/login" element={<Login />} />
@@ -82,6 +93,7 @@ function AppRouter() {
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 

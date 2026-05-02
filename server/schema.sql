@@ -226,7 +226,14 @@ CREATE INDEX IF NOT EXISTS idx_executions_project ON test_executions(project_id)
 CREATE INDEX IF NOT EXISTS idx_requirements_project ON requirements(project_id);
 CREATE INDEX IF NOT EXISTS idx_defects_project ON defects(project_id);
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
 CREATE INDEX IF NOT EXISTS idx_activity_logs_user ON activity_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_defects_execution ON defects(execution_id);
+CREATE INDEX IF NOT EXISTS idx_defects_case ON defects(case_id);
+CREATE INDEX IF NOT EXISTS idx_defects_plan ON defects(plan_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_cases_req ON requirements_cases(requirement_id);
+CREATE INDEX IF NOT EXISTS idx_requirements_cases_case ON requirements_cases(case_id);
+CREATE INDEX IF NOT EXISTS idx_test_cases_project_status ON test_cases(project_id, status);
 
 -- Configurar realtime para notificacoes (Supabase realtime)
 -- Nota: Em SQLite local, o realtime eh simulado via polling no cliente

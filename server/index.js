@@ -336,6 +336,26 @@ function filterToTableCols(table, obj) {
   for (const sql of extraTables) {
     try { db.exec(sql); } catch { /* already exists */ }
   }
+
+  // Indices de performance (idempotentes)
+  const perfIndexes = [
+    'CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)',
+    'CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at)',
+    'CREATE INDEX IF NOT EXISTS idx_defects_execution ON defects(execution_id)',
+    'CREATE INDEX IF NOT EXISTS idx_defects_case ON defects(case_id)',
+    'CREATE INDEX IF NOT EXISTS idx_defects_plan ON defects(plan_id)',
+    'CREATE INDEX IF NOT EXISTS idx_requirements_cases_req ON requirements_cases(requirement_id)',
+    'CREATE INDEX IF NOT EXISTS idx_requirements_cases_case ON requirements_cases(case_id)',
+    'CREATE INDEX IF NOT EXISTS idx_test_cases_project_status ON test_cases(project_id, status)',
+  ];
+  for (const sql of perfIndexes) {
+    try { db.exec(sql); } catch (e) {
+      if (!String(e?.message).includes('already exists')) {
+        console.warn('[index skip]', String(e?.message).slice(0, 120));
+      }
+    }
+  }
+
   _tableColsCache.clear();
 }
 

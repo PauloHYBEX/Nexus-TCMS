@@ -44,14 +44,13 @@ export const Header = () => {
     viewer: { name: 'Visualizador', color: 'text-gray-500' }
   };
 
-  // Carregar notificações e assinar realtime
+  // Carregar notificações com polling otimizado (10s; pausa quando aba oculta)
   useEffect(() => {
     if (!user) return;
 
-    let channel: any = null;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const fetchNotifs = async () => {
-      // Lista todas para controle local (limitamos na UI)
       const { data } = await supabase
         .from('notifications' as any)
         .select('id, title, body, link, created_at, read_at')
@@ -60,7 +59,6 @@ export const Header = () => {
         .limit(50);
       if (data) setNotifs(data as any);
 
-      // Contagem não lidas
       const { count } = await supabase
         .from('notifications' as any)
         .select('id', { count: 'exact', head: true })
@@ -69,16 +67,30 @@ export const Header = () => {
       setNotifCount(count || 0);
     };
 
-    fetchNotifs();
+    const startPolling = () => {
+      if (intervalId) return;
+      intervalId = setInterval(fetchNotifs, 10000);
+    };
+    const stopPolling = () => {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+    };
 
-    // Polling para SQLite (local) - a cada 3 segundos
-    // Realtime nativo do Supabase so funciona em PostgreSQL
-    const intervalId = setInterval(() => {
-      fetchNotifs();
-    }, 3000);
+    const onVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchNotifs(); // atualiza imediatamente ao voltar
+        startPolling();
+      }
+    };
+
+    fetchNotifs();
+    if (!document.hidden) startPolling();
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      clearInterval(intervalId);
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, [user]);
 
