@@ -13,19 +13,42 @@ import { ollamaGenerateText } from '@/integrations/ollama/client';
 import { openRouterGenerateText } from '@/integrations/openrouter/client';
 import { openRouterGenerateTextAdaptive } from '@/integrations/openrouter/adaptive';
 import { validateWithSchema, tryRepairWithSchema, SchemaId } from '@/services/aiSchemas';
+import { listStoredKeys, revealApiKey, saveApiKey, deleteApiKey, migrateLegacyKeys } from '@/services/apiKeysService';
 
-// Local storage keys (derivadas dinamicamente para segurança)
+// Local storage key apenas para config (sem chaves). Chaves ficam no backend criptografadas.
 const getMcpConfigKey = () => `${window.location.hostname}_mcp_config`;
-const getApiKeysKey = () => `${window.location.hostname}_mcp_api_keys`;
 
-// Helper to read API key from localStorage store
-const getStoredApiKey = (modelId: string): string | undefined => {
+// Cache sincrono em memoria de {modelId -> bool has_key} para UI rapida.
+// Populado por refreshKeyCache() apos login/carregamento de config.
+const _keyPresenceCache = new Map<string, boolean>(); // key: `${provider}::${modelId}`
+const _providerKeyCache = new Map<string, boolean>(); // key: provider (fallback quando modelId nao tem chave propria)
+
+const presenceKey = (provider: string, modelId: string) => `${provider}::${modelId}`;
+
+// Atualiza o cache sincrono (chamar apos login e apos operacoes CRUD)
+export const refreshKeyCache = async (): Promise<void> => {
   try {
-    const stored = JSON.parse(localStorage.getItem(getApiKeysKey()) || '{}');
-    return stored[modelId];
+    const rows = await listStoredKeys();
+    _keyPresenceCache.clear();
+    _providerKeyCache.clear();
+    for (const r of rows) {
+      _keyPresenceCache.set(presenceKey(r.provider, r.model_id || ''), true);
+      _providerKeyCache.set(r.provider, true);
+    }
   } catch {
-    return undefined;
+    // Cache mantem estado anterior se falhar (ex: offline)
   }
+};
+
+// Verifica presenca de chave (sincrono, usa cache)
+const hasStoredKey = (provider: string, modelId: string): boolean => {
+  return _keyPresenceCache.get(presenceKey(provider, modelId)) === true
+    || _providerKeyCache.get(provider) === true;
+};
+
+// Recupera a chave real de forma assincrona (para chamadas a providers)
+const getApiKeyForModel = async (provider: string, modelId: string): Promise<string | null> => {
+  return await revealApiKey(provider, modelId);
 };
 
 // Modelos depreciados que devem ser removidos da config armazenada
@@ -416,11 +439,10 @@ const PROVIDER_PRIORITY: Record<string, number> = {
   gemini: 10, groq: 8, openrouter: 6, anthropic: 7, openai: 9, ollama: 4, other: 1
 };
 
-// Verifica se um modelo tem API key válida configurada
+// Verifica se um modelo tem API key válida configurada (sincrono, usa cache)
 const modelHasKey = (model: AIModel): boolean => {
   if (model.provider === 'ollama') return true; // local, sem chave
-  const stored = getStoredApiKey(model.id);
-  return Boolean(stored || model.apiKey);
+  return hasStoredKey(model.provider, model.id) || Boolean(model.apiKey);
 };
 
 // Seleciona automaticamente o melhor modelo disponível para uma tarefa
@@ -629,10 +651,10 @@ export const executeTask = async (
   
   // Debug logging of resolved model and API key presence (does not reveal the key value)
   try {
-    const hasApiKey = model.provider === 'gemini'
-      ? Boolean(getStoredApiKey(model.id))
-      : Boolean(getStoredApiKey(model.id) || model.apiKey);
-    console.debug('[MCP] executeTask:model', { task, modelId: model.id, provider: model.provider, hasApiKey });
+    const hasApiKey = hasStoredKey(model.provider, model.id) || Boolean(model.apiKey);
+    if (import.meta.env.DEV) {
+      console.debug('[MCP] executeTask:model', { task, modelId: model.id, provider: model.provider, hasApiKey });
+    }
   } catch {
     // noop
   }
@@ -705,7 +727,7 @@ export const executeTask = async (
       const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
         ? model.settings.apiModel.trim()
         : model.id;
-      const apiKey = getStoredApiKey(model.id) || model.apiKey;
+      const apiKey = (await getApiKeyForModel('openai', model.id)) || model.apiKey || '';
       const text = await openAIGenerateText(prompt, apiModelName, apiKey);
       if (isGeneralCompletion) return text;
       try {
@@ -733,7 +755,7 @@ export const executeTask = async (
       const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
         ? model.settings.apiModel.trim()
         : model.id;
-      const apiKey = getStoredApiKey(model.id) || model.apiKey;
+      const apiKey = (await getApiKeyForModel('anthropic', model.id)) || model.apiKey || '';
       const text = await anthropicGenerateText(prompt, apiModelName, apiKey);
       if (isGeneralCompletion) return text;
       try {
@@ -761,7 +783,7 @@ export const executeTask = async (
       const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
         ? model.settings.apiModel.trim()
         : model.id;
-      const apiKey = getStoredApiKey(model.id) || model.apiKey;
+      const apiKey = (await getApiKeyForModel('groq', model.id)) || model.apiKey || '';
       const text = await groqGenerateText(prompt, apiModelName, apiKey);
       if (isGeneralCompletion) return text;
       try {
@@ -789,7 +811,7 @@ export const executeTask = async (
       const apiModelName = (model.settings && typeof model.settings.apiModel === 'string' && model.settings.apiModel.trim())
         ? model.settings.apiModel.trim()
         : model.id;
-      const apiKey = getStoredApiKey(model.id) || model.apiKey;
+      const apiKey = (await getApiKeyForModel('openrouter', model.id)) || model.apiKey || '';
 
       // Verifica se há slugs alternativos configurados para fallback
       const adaptiveSlugs = model.settings?.adaptiveSlugs;
@@ -935,13 +957,8 @@ export const loadMCPConfigFromSupabase = async (userId: string): Promise<AIModel
     const config = parsed.mcp_config as AIModelConfig | undefined;
     if (!config?.models) return null;
 
-    // Restore API keys from local storage
-    const storedApiKeys = JSON.parse(localStorage.getItem(getApiKeysKey()) || '{}');
-    config.models = config.models.map(model => ({
-      ...model,
-      apiKey: storedApiKeys[model.id] || model.apiKey
-    }));
-
+    // Chaves ficam no backend criptografadas. Nao copiamos para o objeto model aqui.
+    // A presenca e verificada via hasStoredKey(); a chave real e recuperada em getApiKeyForModel().
     return config;
   } catch (error) {
     console.error('Error loading MCP config from Supabase:', error);
@@ -949,18 +966,28 @@ export const loadMCPConfigFromSupabase = async (userId: string): Promise<AIModel
   }
 };
 
-// Save API keys to local storage
-export const saveApiKeys = (config: AIModelConfig): void => {
-  const apiKeys: Record<string, string> = {};
-
-  config.models.forEach(model => {
-    if (model.apiKey) {
-      apiKeys[model.id] = model.apiKey;
+// Persiste as API keys dos modelos no backend (criptografadas). Limpa chaves ausentes.
+// Mantem o nome da funcao por compatibilidade com callsites existentes.
+export const saveApiKeys = async (config: AIModelConfig): Promise<void> => {
+  for (const model of config.models) {
+    if (!model.apiKey) continue;
+    try {
+      await saveApiKey(model.provider, String(model.apiKey), model.id);
+    } catch (e) {
+      if (import.meta.env.DEV) console.warn('[MCP] Falha ao salvar chave', model.provider, model.id, e);
     }
-  });
-
-  localStorage.setItem(getApiKeysKey(), JSON.stringify(apiKeys));
+  }
+  await refreshKeyCache();
 };
+
+// Remove uma chave do backend e do cache local
+export const removeApiKey = async (provider: string, modelId = ''): Promise<void> => {
+  try { await deleteApiKey(provider, modelId); } catch { /* noop */ }
+  await refreshKeyCache();
+};
+
+// Re-exporta utilitario de migracao para uso no login
+export { migrateLegacyKeys };
 
 // ── Busca de modelos disponíveis via API do provedor ────────────────────────
 export interface ProviderModel {

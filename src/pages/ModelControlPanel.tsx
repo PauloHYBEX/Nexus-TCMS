@@ -295,7 +295,7 @@ export const ModelControlPanel = () => {
 
   const saveConfigToSupabase = async () => {
     if (!user || !config) return;
-    try { await ModelControlService.saveMCPConfigToSupabase(user.id, config); ModelControlService.saveApiKeys(config); alert('Configurações salvas!'); }
+    try { await ModelControlService.saveMCPConfigToSupabase(user.id, config); await ModelControlService.saveApiKeys(config); alert('Configurações salvas!'); }
     catch { alert('Erro ao salvar configurações.'); }
   };
 

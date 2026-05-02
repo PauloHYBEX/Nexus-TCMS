@@ -204,7 +204,19 @@ CREATE TABLE IF NOT EXISTS role_requests (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Chaves de API criptografadas (AES-256-GCM at-rest). A chave raw nunca e persistida em texto claro.
+CREATE TABLE IF NOT EXISTS api_keys (
+  user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  model_id TEXT DEFAULT '',
+  key_encrypted TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, provider, model_id)
+);
+
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
 CREATE INDEX IF NOT EXISTS idx_test_plans_project ON test_plans(project_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_plan ON test_cases(plan_id);
 CREATE INDEX IF NOT EXISTS idx_test_cases_project ON test_cases(project_id);

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
 import { getClient, db, query } from './db.js';
+import { encrypt as encryptSecret, decrypt as decryptSecret } from './lib/crypto.js';
 import JSZip from 'jszip';
 import { DOMParser } from '@xmldom/xmldom';
 import mammoth from 'mammoth';
@@ -321,6 +322,15 @@ function filterToTableCols(table, obj) {
       status TEXT DEFAULT 'pending',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
+    )`,
+    `CREATE TABLE IF NOT EXISTS api_keys (
+      user_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      model_id TEXT DEFAULT '',
+      key_encrypted TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, provider, model_id)
     )`,
   ];
   for (const sql of extraTables) {
@@ -682,6 +692,82 @@ app.post('/api/documents/extract', requireUser, upload.single('file'), async (re
       filename: req.file.originalname,
       format: ext.slice(1)
     });
+  } catch (error) { next(error); }
+});
+
+// ── API Keys (LLM) — criptografadas em repouso com AES-256-GCM ─────────────
+// GET /api/ai/keys            -> lista {provider, model_id, has_key} (nunca a chave)
+// POST /api/ai/keys           -> body: { provider, model_id?, key }  (salva/atualiza)
+// DELETE /api/ai/keys         -> body: { provider, model_id? }
+// POST /api/ai/keys/reveal    -> body: { provider, model_id? } -> { key } (somente dono)
+// Regra: sempre escopado ao req.user.id. Nunca se recupera chave de outro usuario.
+
+const VALID_PROVIDERS = new Set(['gemini', 'openai', 'anthropic', 'groq', 'openrouter', 'ollama']);
+
+function sanitizeProvider(p) {
+  const v = String(p || '').toLowerCase().trim();
+  return VALID_PROVIDERS.has(v) ? v : null;
+}
+
+app.get('/api/ai/keys', requireUser, (req, res, next) => {
+  try {
+    const { rows } = query(
+      'SELECT provider, model_id, created_at, updated_at FROM api_keys WHERE user_id = ? ORDER BY provider, model_id',
+      [req.user.id]
+    );
+    res.json({ data: rows.map(r => ({ ...r, has_key: true })), error: null });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/ai/keys', requireUser, (req, res, next) => {
+  try {
+    const provider = sanitizeProvider(req.body?.provider);
+    if (!provider) return res.status(400).json({ error: { message: 'Provider invalido.' } });
+    const modelId = String(req.body?.model_id || '').slice(0, 128);
+    const key = String(req.body?.key || '').trim();
+    if (!key) return res.status(400).json({ error: { message: 'Chave vazia.' } });
+    if (key.length > 8192) return res.status(400).json({ error: { message: 'Chave muito longa.' } });
+    const encrypted = encryptSecret(key);
+    query(
+      `INSERT INTO api_keys (user_id, provider, model_id, key_encrypted, updated_at)
+       VALUES (?, ?, ?, ?, datetime('now'))
+       ON CONFLICT (user_id, provider, model_id)
+       DO UPDATE SET key_encrypted = excluded.key_encrypted, updated_at = datetime('now')`,
+      [req.user.id, provider, modelId, encrypted]
+    );
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
+app.delete('/api/ai/keys', requireUser, (req, res, next) => {
+  try {
+    const provider = sanitizeProvider(req.body?.provider);
+    if (!provider) return res.status(400).json({ error: { message: 'Provider invalido.' } });
+    const modelId = String(req.body?.model_id || '').slice(0, 128);
+    query('DELETE FROM api_keys WHERE user_id = ? AND provider = ? AND model_id = ?', [req.user.id, provider, modelId]);
+    res.json({ ok: true });
+  } catch (error) { next(error); }
+});
+
+app.post('/api/ai/keys/reveal', requireUser, (req, res, next) => {
+  try {
+    const provider = sanitizeProvider(req.body?.provider);
+    if (!provider) return res.status(400).json({ error: { message: 'Provider invalido.' } });
+    const modelId = String(req.body?.model_id || '').slice(0, 128);
+    // Tenta exato primeiro; fallback para model_id vazio (chave de provider)
+    let { rows } = query(
+      'SELECT key_encrypted FROM api_keys WHERE user_id = ? AND provider = ? AND model_id = ?',
+      [req.user.id, provider, modelId]
+    );
+    if (!rows.length && modelId) {
+      ({ rows } = query(
+        'SELECT key_encrypted FROM api_keys WHERE user_id = ? AND provider = ? AND model_id = ?',
+        [req.user.id, provider, '']
+      ));
+    }
+    if (!rows.length) return res.status(404).json({ error: { message: 'Chave nao cadastrada.' } });
+    const key = decryptSecret(rows[0].key_encrypted);
+    res.json({ key });
   } catch (error) { next(error); }
 });
 

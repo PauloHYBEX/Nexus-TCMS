@@ -1,36 +1,11 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getCachedKeySync } from '@/services/apiKeysService';
 
-// Function to get API key from Model Control Service
+// Recupera a chave do Gemini a partir do cache em memoria (populado pelo apiKeysService).
+// O cache e preenchido apos login e em operacoes CRUD. Nunca lemos chaves de localStorage.
 const getGeminiApiKey = (modelId?: string): string => {
-  try {
-    const host = typeof window !== 'undefined' ? window.location.hostname : '';
-    const keysKeys = host ? [`${host}_mcp_api_keys`, 'mcp_api_keys'] : ['mcp_api_keys'];
-    const configKeys = host ? [`${host}_mcp_config`, 'mcp_config'] : ['mcp_config'];
-
-    let storedKeys: Record<string, string> = {};
-    for (const k of keysKeys) {
-      const raw = localStorage.getItem(k);
-      if (raw) { try { storedKeys = JSON.parse(raw); break; } catch {} }
-    }
-    if (modelId && storedKeys[modelId]) return storedKeys[modelId];
-
-    for (const k of configKeys) {
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      try {
-        const cfg = JSON.parse(raw);
-        const geminiIds: string[] = cfg.models?.filter((m: any) => m.provider === 'gemini').map((m: any) => m.id) || [];
-        for (const id of geminiIds) {
-          if (storedKeys[id]) return storedKeys[id];
-        }
-        const geminiModel = cfg.models?.find((m: any) => m.provider === 'gemini' && m.apiKey);
-        if (geminiModel?.apiKey) return geminiModel.apiKey as string;
-      } catch {}
-    }
-  } catch (error) {
-    console.warn('Failed to load API key from Model Control Service:', error);
-  }
-  return '';
+  const cached = getCachedKeySync('gemini', modelId || '');
+  return cached || '';
 };
 
 // Initialize the Gemini API with dynamic key loading

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { preloadAllKeys, clearApiKeysCache, migrateLegacyKeys } from '@/services/apiKeysService';
 
 interface AuthUser {
   id: string;
@@ -34,9 +35,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // Get initial session
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+      .then(async ({ data: { session } }) => {
         setSession(session);
         setUser(session?.user ?? null);
+        if (session?.user) {
+          // Migrar chaves legadas do localStorage (idempotente) e pre-carregar em memoria
+          try { await migrateLegacyKeys(); } catch { /* noop */ }
+          try { await preloadAllKeys(); } catch { /* noop */ }
+        }
       })
       .catch((error) => {
         console.warn('Falha ao obter sessão local inicial:', error);
@@ -53,6 +59,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
+      if (event === 'SIGNED_IN' && session?.user) {
+        try { await migrateLegacyKeys(); } catch { /* noop */ }
+        try { await preloadAllKeys(); } catch { /* noop */ }
+      } else if (event === 'SIGNED_OUT') {
+        clearApiKeysCache();
+      }
       setLoading(false);
     });
 
